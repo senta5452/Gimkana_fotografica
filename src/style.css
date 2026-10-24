@@ -735,6 +735,13 @@ button:disabled {
   opacity: 0.88;
 }
 
+/* Botó de la galeria: mateixa forma, colors de botó secundari */
+.photo-upload-button-secondary {
+  border-color: var(--border);
+  color: #dce5f0;
+  background: #202e41;
+}
+
 .photo-upload-button:has(+ .photo-upload-input:disabled) {
   opacity: 0.4;
   cursor: not-allowed;

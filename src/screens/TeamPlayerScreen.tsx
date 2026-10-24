@@ -1,4 +1,4 @@
-import { Camera, Check, Clock3, X } from "lucide-react";
+import { Camera, Check, Clock3, Image as ImageIcon, X } from "lucide-react";
 import type { Team } from "../types";
 import { formatBonus } from "../utils";
 
@@ -150,35 +150,51 @@ export default function TeamPlayerScreen({
             ))}
         </select>
 
-        <label htmlFor={`photo-${team.id}`} className="photo-upload-button">
-          <Camera size={20} />
-          <span>Fer una fotografia</span>
-        </label>
+        {/* Dos botons: càmera (fa la foto en el moment) i galeria (foto ja feta).
+            Cada botó és l'etiqueta del seu camp de fitxer, que està amagat. */}
+        {(
+          [
+            { source: "camera", label: "Fer una fotografia", icon: <Camera size={20} /> },
+            { source: "gallery", label: "Triar de la galeria", icon: <ImageIcon size={20} /> },
+          ] as const
+        ).map(({ source, label, icon }) => (
+          <div key={source}>
+            <label
+              htmlFor={`photo-${source}-${team.id}`}
+              className={`photo-upload-button ${
+                source === "gallery" ? "photo-upload-button-secondary" : ""
+              }`}
+            >
+              {icon}
+              <span>{label}</span>
+            </label>
 
-        <input
-          id={`photo-${team.id}`}
-          className="photo-upload-input"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          disabled={
-            !running ||
-            finished ||
-            hasPending ||
-            !selectedChallengeId ||
-            allApproved ||
-            sending
-          }
-          onChange={(event) => {
-            const file = event.target.files?.[0];
+            <input
+              id={`photo-${source}-${team.id}`}
+              className="photo-upload-input"
+              type="file"
+              accept="image/*"
+              capture={source === "camera" ? "environment" : undefined}
+              disabled={
+                !running ||
+                finished ||
+                hasPending ||
+                !selectedChallengeId ||
+                allApproved ||
+                sending
+              }
+              onChange={(event) => {
+                const file = event.target.files?.[0];
 
-            if (file) {
-              onPhotoSelected(file);
-            }
+                if (file) {
+                  onPhotoSelected(file);
+                }
 
-            event.target.value = "";
-          }}
-        />
+                event.target.value = "";
+              }}
+            />
+          </div>
+        ))}
 
         {!running && !finished && (
           <p>Podràs enviar fotos quan el monitor iniciï la partida.</p>
