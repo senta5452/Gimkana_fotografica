@@ -17,7 +17,7 @@ Estic desenvolupant una aplicació web anomenada **Gimcana Fotogràfica**. Soc p
 - No demanis contrasenyes, tokens ni claus secretes.
 - Quan hagis de crear una Edge Function nova, segueix el mateix patró de les que ja funcionen (vegeu secció 5).
 
-**Punt exacte per reprendre:** la Fase 5 està acabada i confirmada. Cal triar la fase següent: Fase 2 (biblioteca de reptes) o Fase 7 (publicar i provar amb dispositius reals). Git està endreçat i els commits es pugen a GitHub quan el canvi està provat.
+**Punt exacte per reprendre:** les Fases 2 i 5 estan acabades i confirmades. Decisió: abans de publicar (Fase 7), fer tot el que es pugui en local, per no haver de publicar més vegades del necessari. Següent: millores locals pendents (secció 10). Git està endreçat i els commits es pugen a GitHub quan el canvi està provat.
 
 **Terminologia:** a la interfície, el rol de "jutge" es diu **monitor** (decisió del 24/10/2026). Tots els textos visibles del frontend diuen "monitor". Al codi (noms de funcions `judge-*`, components `Judge*`, comentaris) i en aquest document es continua dient "jutge". Última actualització del document: 24/10/2026.
 
@@ -87,7 +87,7 @@ Funcionalitats desitjades:
 - Fotografies guardades permanentment.
 - Publicació final amb una URL pública.
 
-**Important:** tot l'estat de la partida (rellotge, estat, final, resultat, enviaments i reinici) ja surt del servidor i el codi local antic s'ha retirat (Fase 5, passos 5-7), però l'aplicació encara no està publicada ni s'ha provat amb dispositius diferents de debò, i les partides noves no tenen reptes (Fase 2). No afirmar que està acabada ni publicada.
+**Important:** tot l'estat de la partida (rellotge, estat, final, resultat, enviaments i reinici) ja surt del servidor i el codi local antic s'ha retirat (Fase 5, passos 5-7), però l'aplicació encara no està publicada ni s'ha provat amb dispositius diferents de debò. Les partides noves ja es creen amb reptes de la biblioteca (Fase 2). No afirmar que està acabada ni publicada.
 
 ---
 
@@ -143,7 +143,9 @@ Ja s'ha comprovat que la creació de partides funciona i retorna les dades neces
 
 La funció valida la sessió del jutge, genera un codi de partida i dos PINs aleatoris, emmagatzema els PINs com a hashes (PBKDF2) i crea els dos equips. La partida es crea amb `judge_id` del jutge, estat `setup` i durada 1200 segons.
 
-Les partides de prova ja creades no s'han de donar per defecte com a partides de producció. Les partides noves creades amb `create-game` encara NO tenen reptes (vegeu Fase 2); les partides de prova antigues en tenen 5 per equip (4.10). Amb una partida sense reptes, en acabar el temps sempre surt "Empat!" (0 a 0): confirmat.
+Les partides de prova ja creades no s'han de donar per defecte com a partides de producció.
+
+Des de la Fase 2 (confirmat), `create-game` també rep `teamA` i `teamB`: llistes d'identificadors de reptes de `challenge_library` (entre 1 i 50 per equip, sense repetits). Comprova que siguin del jutge, crea els equips i copia els reptes a `challenges` (títol i descripció) amb un ordre barrejat a l'atzar per a cada equip (`position` comença per 1). Si falla la còpia, esborra la partida. Les partides creades abans de la Fase 2 entre el 23 i el 24/10 no tenen reptes (amb aquestes, en acabar el temps sempre surt "Empat!").
 
 ### 4.5. Entrada dels equips
 
@@ -178,7 +180,9 @@ El nom de la partida es mostra a la pantalla de l'equip mitjançant `joinedGameN
 
 ### 4.8. Taules de Supabase i columnes
 
-Les cinc taules existeixen: `games`, `teams`, `challenges`, `submissions`, `team_sessions`.
+Les sis taules existeixen: `games`, `teams`, `challenges`, `submissions`, `team_sessions` i `challenge_library` (Fase 2).
+
+`challenge_library`: `id` uuid, `judge_id` uuid (default `auth.uid()`, FK a auth.users, cascade), `title` text (1-120 caràcters), `description` text (nullable, fins a 500), `created_at`. Creada amb SQL el 24/10/2026.
 
 `games`: `id` uuid, `judge_id` uuid (FK a auth.users, cascade), `name` text, `status` text (default `setup`; només admet `setup`, `active`, `paused`, `finished`), `duration_seconds` int (default 1200, > 0), `started_at`, `finished_at`, `created_at`, `game_code` text (únic, en majúscules), `clock_started_at` timestamptz i `elapsed_seconds` double precision (default 0).
 
@@ -196,6 +200,7 @@ No cal tornar a comprovar l'existència d'aquestes taules ni els noms de columne
 
 - RLS està activat a les taules.
 - La taula `games` té polítiques perquè el jutge pugui llegir, crear, actualitzar i eliminar les seves pròpies partides (el frontend del jutge llegeix `games` directament per al selector de partides).
+- La taula `challenge_library` té quatre polítiques (select, insert, update, delete) per al rol `authenticated` amb `judge_id = auth.uid()`: cada jutge només veu i gestiona els seus reptes. El frontend del jutge hi accedeix directament amb el client Supabase. Els equips no hi tenen accés.
 - Les altres taules no tenen polítiques de client; l'accés dels equips i les operacions del jutge sobre equips, reptes i enviaments es gestionen mitjançant Edge Functions.
 - Les sessions dels equips es guarden a `team_sessions` amb un hash del token.
 - Les claus secretes s'utilitzen al servidor, no al frontend.
@@ -265,7 +270,7 @@ Vegeu secció 7.
 Les funcions utilitzen variables de servidor com `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` i, les del jutge, `SUPABASE_PUBLISHABLE_KEYS`. No demanar-me les claus ni posar-les a `App.tsx`. Cada carpeta de funció té `index.ts`, `deno.json` i `.npmrc` (les noves es creen copiant els dos últims de `judge-set-game-state`).
 
 **Funcions d'equip i públiques (sessió d'equip amb token propi):**
-- `create-game`: crea la partida i els equips A i B, amb el codi i els PINs (JWT del jutge).
+- `create-game`: crea la partida, els equips A i B (codi i PINs) i els seus reptes copiats de la biblioteca (JWT del jutge; vegeu 4.4).
 - `join-game`: valida codi, equip i PIN i crea una sessió d'equip (té `verify_jwt = false` a `config.toml`). Admet partides `finished`.
 - `validate-team-session`: valida el token personalitzat de sessió de l'equip.
 - `get-team-game`: dades de la partida, l'equip, els reptes, els enviaments (amb `photoUrl` si la partida ha acabat), el rellotge (`clock`, `serverNow`) i el resultat (`result`).
@@ -318,10 +323,11 @@ Fet i confirmat que funciona:
 8. Ids seleccionats a text.
 9. Reptes amb punts (•).
 10. `src/screens/TeamPlayerScreen.tsx` (prop nova `finished`).
-11. `src/screens/CreateGameSection.tsx` (formulari "Nova partida").
-12. `src/screens/JudgeHeader.tsx` (capçalera i introducció del panell; encara amb alguns textos en castellà: "Panel de control del monitor", "por foto").
+11. `src/screens/CreateGameSection.tsx` (formulari "Nova partida": carrega la biblioteca, caselles per als reptes de l'equip A i de l'equip B, botons Tots/Cap i "Copiar els de l'equip A a l'equip B").
+12. `src/screens/JudgeHeader.tsx` (capçalera i introducció del panell).
 13. `src/screens/JudgeTeamGrid.tsx` (targetes dels equips del panell; ara rep `pendingCounts`).
-14. `src/screens/ServerModerationSection.tsx` (secció de moderació del servidor).
+14. `src/screens/ServerModerationSection.tsx` (secció de moderació: "Fotos dels equips").
+15. `src/screens/ChallengeLibraryScreen.tsx` (Fase 2: pantalla "Biblioteca de reptes", vista `library`; crear, editar i esborrar reptes de `challenge_library`; exporta el tipus `LibraryChallenge`). S'hi accedeix amb el botó "Obrir la biblioteca" del panell.
 
 Sense extreure (continuen dins d'`App.tsx`): la barra de control (Iniciar/Pausar/Reiniciar), el selector de partida i el modal de resultat.
 
@@ -349,13 +355,11 @@ Sense extreure (continuen dins d'`App.tsx`): la barra de control (Iniciar/Pausar
 
 ### Fase 1b — Reorganització del codi: aturada per decisió pròpia (secció 7)
 
-### Fase 2 — Biblioteca de reptes i creació de partides (pendent; idea meva)
-Vull una pantalla separada, accessible des de la del jutge, per crear la partida i decidir quins reptes té cada equip, escollint d'una llista de reptes ja creats. També vull un formulari per crear reptes manualment.
-Pla provisional:
-1. Crear una taula nova per a la biblioteca de reptes (títol, descripció) i un formulari per afegir-ne.
-2. Pantalla de creació de partida amb selecció dels reptes de cada equip.
-3. Adaptar `create-game` perquè rebi els reptes triats i en copiï a `challenges` per a cada equip (còpia, perquè canviar la biblioteca no alteri partides ja creades).
-Cal vigilar RLS: el jutge hauria de gestionar la biblioteca mitjançant polítiques pròpies o Edge Functions.
+### Fase 2 — Biblioteca de reptes i creació de partides: FETA (confirmada el 24/10/2026)
+Decisions de disseny: reptes triats per separat per a cada equip (amb botó per copiar els de l'A a la B); una biblioteca per a cada monitor; es poden crear, editar i esborrar; l'ordre de cada equip es barreja a l'atzar en crear la partida.
+1. FET: taula `challenge_library` amb RLS (4.8, 4.9) i pantalla de la biblioteca (`ChallengeLibraryScreen`).
+2. FET: formulari "Nova partida" amb selecció dels reptes de cada equip (`CreateGameSection`).
+3. FET: `create-game` rep els reptes triats i en fa una còpia a `challenges` (4.4). Confirmat que editar o esborrar un repte de la biblioteca no altera les partides ja creades.
 
 ### Fase 3 — Desar els enviaments i moderar-los amb dades reals: GAIRE BÉ FET
 Fet: enviaments a `submissions`, llista i revisió del jutge, aprovació de reptes al servidor, pantalla de l'equip sincronitzada, resum de l'equip amb dades del servidor. Pendent: que l'equip vegi el motiu del rebuig durant la partida, i que l'historial del jutge usi dades del servidor.
@@ -398,7 +402,7 @@ Provar jutge i dos equips amb dispositius diferents de debò (ara ja és possibl
 
 Estàs al xat de VS Code amb accés al repositori: llegeix tu mateix `src/App.tsx` i la resta de fitxers abans de proposar canvis.
 
-**Següent pas:** la Fase 5 està acabada. Triar entre la Fase 2 (biblioteca de reptes, perquè les partides noves tinguin reptes) i la Fase 7 (publicar i provar amb dispositius reals).
+**Següent pas:** les Fases 2 i 5 estan acabades. Abans de publicar (Fase 7), fer les millores locals pendents (vegeu secció 8): que l'equip vegi el motiu d'un rebuig i els errors d'enviament, avís de resultat al panell del monitor, límits del bucket (mida i tipus) i, potser, compressió de les fotos abans de pujar-les. Quan es publiquin Edge Functions per aquestes millores, canviar també els missatges "jutge" → "monitor".
 
 ---
 

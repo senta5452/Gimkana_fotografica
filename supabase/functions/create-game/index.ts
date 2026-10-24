@@ -28,6 +28,36 @@ function randomCode(length: number) {
   ).join("");
 }
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_CHALLENGES_PER_TEAM = 50;
+
+// Llista d'identificadors de reptes de la biblioteca: entre 1 i 50, sense
+// repetits. Retorna null si no és vàlida.
+function parseChallengeIds(value: unknown) {
+  if (!Array.isArray(value)) return null;
+  if (value.length < 1 || value.length > MAX_CHALLENGES_PER_TEAM) return null;
+  if (!value.every((id) => typeof id === "string" && UUID_PATTERN.test(id))) {
+    return null;
+  }
+  if (new Set(value).size !== value.length) return null;
+
+  return value as string[];
+}
+
+// Barreja aleatòria (Fisher-Yates) amb números segurs.
+function shuffle<T>(items: T[]) {
+  const result = [...items];
+
+  for (let i = result.length - 1; i > 0; i--) {
+    const random = crypto.getRandomValues(new Uint32Array(1))[0];
+    const j = random % (i + 1);
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+
+  return result;
+}
+
 function randomPin() {
   const bytes = crypto.getRandomValues(new Uint8Array(4));
   const value = new DataView(bytes.buffer).getUint32(0);
@@ -119,7 +149,7 @@ Deno.serve(async (req) => {
       },
     });
 
-    let body: { name?: unknown };
+    let body: { name?: unknown; teamA?: unknown; teamB?: unknown };
 
     try {
       body = await req.json();
@@ -132,6 +162,40 @@ Deno.serve(async (req) => {
 
     if (!name || name.length > 100) {
       return response({ error: "El nom ha de tenir entre 1 i 100 caràcters." }, 400);
+    }
+
+    const teamAIds = parseChallengeIds(body.teamA);
+    const teamBIds = parseChallengeIds(body.teamB);
+
+    if (!teamAIds || !teamBIds) {
+      return response({
+        error:
+          `Cada equip ha de tenir entre 1 i ${MAX_CHALLENGES_PER_TEAM} reptes.`,
+      }, 400);
+    }
+
+    // Els reptes han de ser de la biblioteca d'aquest monitor
+    const allIds = [...new Set([...teamAIds, ...teamBIds])];
+
+    const { data: libraryRows, error: libraryError } = await admin
+      .from("challenge_library")
+      .select("id, title, description")
+      .eq("judge_id", userData.user.id)
+      .in("id", allIds);
+
+    if (libraryError) {
+      console.error("No s'ha pogut consultar la biblioteca:", libraryError.code);
+      return response({ error: "No s'han pogut consultar els reptes." }, 500);
+    }
+
+    const libraryById = new Map(
+      (libraryRows ?? []).map((row) => [row.id, row]),
+    );
+
+    if (libraryById.size !== allIds.length) {
+      return response({
+        error: "Algun dels reptes triats ja no existeix a la biblioteca.",
+      }, 400);
     }
 
     let game: { id: string; game_code: string } | null = null;
@@ -174,7 +238,7 @@ Deno.serve(async (req) => {
       hashPin(pinB),
     ]);
 
-    const { error: teamError } = await admin.from("teams").insert([
+    const { data: createdTeams, error: teamError } = await admin.from("teams").insert([
       {
         game_id: game.id,
         team_key: "A",
@@ -187,14 +251,46 @@ Deno.serve(async (req) => {
         name: "Equip B",
         access_code_hash: hashB,
       },
-    ]);
+    ]).select("id, team_key");
 
-    if (teamError) {
-      console.error("No s'han pogut crear els equips:", teamError.code);
+    if (teamError || !createdTeams) {
+      console.error("No s'han pogut crear els equips:", teamError?.code);
 
       await admin.from("games").delete().eq("id", game.id);
 
       return response({ error: "No s'han pogut crear els equips." }, 500);
+    }
+
+    // Còpia dels reptes triats per a cada equip, en ordre barrejat. És una
+    // còpia perquè canviar la biblioteca no alteri les partides ja creades.
+    const teamIdByKey = new Map(
+      createdTeams.map((team) => [team.team_key, team.id]),
+    );
+
+    const challengeRows = [
+      { key: "A", ids: teamAIds },
+      { key: "B", ids: teamBIds },
+    ].flatMap(({ key, ids }) =>
+      shuffle(ids).map((id, index) => ({
+        team_id: teamIdByKey.get(key),
+        title: libraryById.get(id)!.title,
+        description: libraryById.get(id)!.description,
+        position: index + 1,
+        approved: false,
+      }))
+    );
+
+    const { error: challengesError } = await admin
+      .from("challenges")
+      .insert(challengeRows);
+
+    if (challengesError) {
+      console.error("No s'han pogut crear els reptes:", challengesError.code);
+
+      // En esborrar la partida, s'esborren també els equips (cascade).
+      await admin.from("games").delete().eq("id", game.id);
+
+      return response({ error: "No s'han pogut crear els reptes." }, 500);
     }
 
     return response({

@@ -607,7 +607,7 @@ export default function App() {
       }
     }
 
-    async function handleCreateGame() {
+    async function handleCreateGame(teamA: string[], teamB: string[]) {
     if (!session?.access_token) {
       setGameError("Has d'iniciar sessió com a monitor.");
       return;
@@ -621,7 +621,7 @@ export default function App() {
       const { data, error } = await supabase.functions.invoke(
         "create-game",
         {
-          body: { name: gameName.trim() || "Nova gimcana" },
+          body: { name: gameName.trim() || "Nova gimcana", teamA, teamB },
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
@@ -629,6 +629,19 @@ export default function App() {
       );
 
       if (error) {
+        if (error.context instanceof Response) {
+          try {
+            const message = (await error.context.json()).error;
+
+            if (message) {
+              setGameError(message);
+              return;
+            }
+          } catch {
+            // La resposta no és JSON: mostrem el missatge genèric.
+          }
+        }
+
         throw error;
       }
 
@@ -857,6 +870,7 @@ export default function App() {
         gameName={gameName}
         onGameNameChange={setGameName}
         onCreateGame={handleCreateGame}
+        onOpenLibrary={() => setCurrentView("library")}
         creating={creatingGame}
         error={gameError}
         createdGame={createdGame}
