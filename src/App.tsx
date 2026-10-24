@@ -10,8 +10,14 @@ import {
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import type { Challenge, Team, ServerSubmission } from "./types";
+import type {
+  Challenge,
+  GameResult,
+  ServerSubmission,
+  Team,
+} from "./types";
 import { formatTime } from "./utils";
+import { compressPhoto } from "./compressPhoto";
 import HomeScreen from "./screens/HomeScreen";
 import TeamLoginScreen from "./screens/TeamLoginScreen";
 import JudgeLoginScreen from "./screens/JudgeLoginScreen";
@@ -112,14 +118,7 @@ export default function App() {
   } | null>(null);
 
   // Resultat de la partida calculat pel servidor (get-team-game).
-  const [teamResult, setTeamResult] = useState<{
-    over: boolean;
-    draw: boolean;
-    byCompletion: boolean;
-    winnerKey: string | null;
-    winnerName: string | null;
-    winnerApproved: number;
-  } | null>(null);
+  const [teamResult, setTeamResult] = useState<GameResult | null>(null);
 
   // Rellotge de l'equip tal com el retorna get-team-game, amb el moment
   // en què el navegador l'ha rebut (per comptar enrere entre consultes).
@@ -137,6 +136,7 @@ export default function App() {
   const [judgeServer, setJudgeServer] = useState<{
     status: string;
     durationSeconds: number | null;
+    result: GameResult | null;
     teams: {
       key: string;
       name: string;
@@ -213,6 +213,7 @@ export default function App() {
     setJudgeServer({
       status: data.game?.status ?? "setup",
       durationSeconds: data.game?.durationSeconds ?? null,
+      result: data.result ?? null,
       teams: data.teams ?? [],
       receivedAt: Date.now(),
     });
@@ -472,10 +473,13 @@ export default function App() {
 
     setTeamUploadStatus({ kind: "sending", text: "Enviant la fotografia..." });
 
+    // Foto més lleugera: puja més ràpid amb dades mòbils.
+    const photo = await compressPhoto(file);
+
     const formData = new FormData();
     formData.append("token", token);
     formData.append("challengeId", challengeId);
-    formData.append("photo", file);
+    formData.append("photo", photo);
 
     const { error } = await supabase.functions.invoke("submit-photo", {
       body: formData,
@@ -1096,6 +1100,26 @@ export default function App() {
         allTeamsFinished={judgeFinished}
         onLogout={handleJudgeLogout}
       />
+
+      {judgeServer?.result?.over && (
+        <section className="result-banner" role="status">
+          <Trophy size={28} />
+          <div>
+            <strong>
+              {judgeServer.result.draw
+                ? "Empat!"
+                : `${judgeServer.result.winnerName} guanya la partida`}
+            </strong>
+            <p>
+              {judgeServer.result.draw
+                ? "Els dos equips han acabat amb el mateix nombre de reptes aprovats."
+                : judgeServer.result.byCompletion
+                  ? "Ha completat tota la seva llista de reptes."
+                  : `Ha acabat amb més reptes aprovats (${judgeServer.result.winnerApproved}).`}
+            </p>
+          </div>
+        </section>
+      )}
 
       <JudgeTeamGrid
         teams={judgeTeams}

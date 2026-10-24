@@ -14,6 +14,16 @@ export type Team = {
   finishReason: string | null;
 };
 
+// Resultat de la partida calculat pel servidor (getGameResult).
+export type GameResult = {
+  over: boolean;
+  draw: boolean;
+  byCompletion: boolean;
+  winnerKey: string | null;
+  winnerName: string | null;
+  winnerApproved: number;
+};
+
 export type ServerSubmission = {
   id: string;
   teamId: string;

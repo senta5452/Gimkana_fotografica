@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   getApprovedBonusSeconds,
+  getGameResult,
   getTeamClock,
 } from "../_shared/game-clock.ts";
 
@@ -174,7 +175,30 @@ Deno.serve(async (req) => {
 
     const nowMs = Date.now();
 
+    // Resultat de la partida (el mateix càlcul que veuen els equips)
+    const result = getGameResult(
+      game.status,
+      (teams ?? []).map((team) => {
+        const teamChallenges = (challenges ?? []).filter(
+          (challenge) => challenge.team_id === team.id,
+        );
+
+        return {
+          key: team.team_key,
+          name: team.name,
+          approvedCount: teamChallenges.filter((item) => item.approved).length,
+          clock: getTeamClock(
+            game,
+            team,
+            getApprovedBonusSeconds(teamChallenges),
+            nowMs,
+          ),
+        };
+      }),
+    );
+
     return response({
+      result,
       game: {
         status: game.status,
         durationSeconds: game.duration_seconds,
