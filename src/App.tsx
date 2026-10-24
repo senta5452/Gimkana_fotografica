@@ -259,6 +259,32 @@ export default function App() {
     await loadServerSubmissions();
   }
 
+  async function handleJudgeReset() {
+    if (!selectedGameId) return;
+
+    const confirmed = window.confirm(
+      "Segur que vols reiniciar la partida? S'esborraran totes les fotos enviades i els reptes tornaran a estar pendents."
+    );
+
+    if (!confirmed) return;
+
+    const { error } = await supabase.functions.invoke("judge-reset-game", {
+      body: { gameId: selectedGameId },
+    });
+
+    if (error) {
+      const detail =
+        error.context instanceof Response ? await error.context.text() : "";
+      console.error("judge-reset-game:", error.message, detail);
+      alert("No s'ha pogut reiniciar la partida.");
+      return;
+    }
+
+    // També reiniciem l'estat local mentre encara existeixi (pas 6).
+    resetGame();
+    await loadServerSubmissions();
+  }
+
     async function handleServerReview(
     submissionId: string,
     approved: boolean,
@@ -1247,7 +1273,11 @@ const scoreWinner =
             {judgeRunning ? <Pause size={17} /> : <Play size={17} />}
             {judgeRunning ? "Pausar" : judgeStarted ? "Reprendre" : "Iniciar"}
           </button>
-          <button className="secondary-button" onClick={resetGame}>
+          <button
+            className="secondary-button"
+            onClick={handleJudgeReset}
+            disabled={!judgeServer}
+          >
             <RotateCcw size={16} />
             Reiniciar
           </button>

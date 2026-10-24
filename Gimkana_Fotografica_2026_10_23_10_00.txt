@@ -1,0 +1,442 @@
+# CONTEXT COMPLET DEL PROJECTE — GIMCANA FOTOGRÀFICA
+
+## 1. Instruccions importants per a l'assistent
+
+Estic desenvolupant una aplicació web anomenada **Gimcana Fotogràfica**. Soc principiant en programació i necessito que m'ajudis pas a pas, en català, amb instruccions clares i precises.
+
+**Normes de treball:**
+- Avança d'un pas petit cada vegada (si jo demano fer-ne diversos alhora, es pot).
+- Dona'm la ruta exacta del fitxer que he d'obrir.
+- Digues-me quin text he de buscar i quin codi he d'afegir o substituir.
+- No reescriguis fitxers sencers si no és necessari (els fitxers nous sí que es poden donar sencers).
+- No em facis repetir configuracions que ja hem comprovat que funcionen.
+- No donis per fet que una cosa funciona si encara no s'ha provat.
+- Si necessites veure codi, demana'm el fragment exacte abans de proposar canvis arriscats.
+- Després de cada canvi, espera que et confirmi el resultat abans de continuar.
+- No eliminis funcionalitats existents, com el temporitzador o la moderació, fins que la versió del servidor les substitueixi i estigui provada.
+- No demanis contrasenyes, tokens ni claus secretes.
+- Quan hagis de crear una Edge Function nova, segueix el mateix patró de les que ja funcionen (vegeu secció 5).
+
+**Punt exacte per reprendre:** decidir si s'endreça Git (secció 8) i després Fase 5, pas 6 (secció 9): retirar el codi local antic. Els passos 1-5 i 7 de la Fase 5 estan fets i confirmats. Última actualització del document: 24/10/2026.
+
+**Entorn de treball:** treballo al xat de VS Code (Claude Code), que té accés a tot el repositori. L'assistent llegeix ell mateix els fitxers del projecte (`src/App.tsx`, `supabase/functions/...`); no cal que enganxi fragments de codi. Les normes de treball continuen valent igual (un pas petit, esperar la meva confirmació, no demanar-me claus). Si l'assistent ha de modificar fitxers, m'explica abans què canviarà i en quins fitxers, i després de cada canvi em diu exactament què he de provar. Les publicacions de les Edge Functions les faig jo amb `npx.cmd supabase functions deploy <nom>`.
+
+---
+
+## 2. Tecnologies i ubicació
+
+- Windows
+- Visual Studio Code
+- Interfície de l'app en català
+- React
+- TypeScript
+- Vite
+- Supabase (Auth, base de dades, Storage i Edge Functions)
+
+Carpeta del projecte:
+
+`C:\Users\SENTA\OneDrive\Escritorio\Gimkana fotografica`
+
+Fitxers principals:
+- `src/App.tsx` (encara conté la lògica general, el panell del jutge i la major part dels estats)
+- `src/main.tsx`
+- `src/style.css` (els estils; `main.tsx` importa `./style.css`)
+- `src/supabase.ts`
+- `src/types.ts` (tipus `Challenge`, `Team`, `Submission`, `ServerSubmission`)
+- `src/utils.ts` (constants, `createTeam`, `formatTime`)
+- `src/screens/` (pantalles i components extrets d'`App.tsx`, vegeu secció 7)
+- `Gimkana_Fotografica_decisions.txt` (document de requisits del projecte)
+- `supabase/config.toml`
+- `supabase/functions/` (una carpeta per funció, més `_shared/game-clock.ts` amb el càlcul del rellotge i del resultat compartit)
+
+Per executar ordres de npm a PowerShell, faig servir habitualment `npm.cmd` (i `npx.cmd` si cal) perquè PowerShell pot bloquejar l'execució de scripts.
+
+Projecte Supabase:
+
+`https://envdxghobrefcgcmvmlx.supabase.co`
+
+Repositori Git: branca `main`, amb remot a GitHub (`https://github.com/senta5452/Gimkana_fotografica.git`). Vegeu 8 (problemes de Git).
+
+---
+
+## 3. Objectiu final de l'aplicació
+
+Vull publicar una aplicació web amb una URL pública perquè diversos dispositius puguin participar en una mateixa partida.
+
+Hi haurà tres accessos:
+
+1. **Jutge:** inicia sessió amb correu electrònic i contrasenya, crea partides i revisa les fotografies.
+2. **Equip A:** introdueix el codi de partida i el PIN de l'equip A.
+3. **Equip B:** introdueix el codi de partida i el PIN de l'equip B.
+
+Cada partida tindrà el seu propi codi, dos PINs, dos equips i els seus reptes.
+
+Funcionalitats desitjades:
+- Temporitzador de 20 minuts.
+- Afegir 3 minuts per cada repte aprovat.
+- Pausar i reprendre el temporitzador.
+- Enviar fotografies per completar reptes.
+- El jutge aprova o rebutja fotografies i pot afegir comentaris.
+- Historial d'enviaments.
+- Condicions de finalització de la partida.
+- Reinici de partides.
+- Estat compartit entre dispositius.
+- Actualitzacions en temps real.
+- Fotografies guardades permanentment.
+- Publicació final amb una URL pública.
+
+**Important:** el rellotge, l'estat, el final i el resultat de la partida ja surten del servidor (Fase 5, pas 5), però l'aplicació encara no està publicada ni s'ha provat amb dispositius diferents de debò. Encara queda codi local antic (pas 6) i les partides noves no tenen reptes (Fase 2). No afirmar que està acabada ni publicada.
+
+---
+
+## 4. Coses que ja s'han comprovat que funcionen
+
+### 4.1. Entorn local i eines
+
+- El projecte React + TypeScript + Vite existeix a la carpeta indicada.
+- Treballo amb VS Code a Windows.
+- La CLI de Supabase està instal·lada i funciona.
+- La versió de CLI comprovada és `2.121.0`.
+- He iniciat sessió amb la CLI de Supabase.
+- El projecte local està vinculat al projecte Supabase correcte.
+- Deno està instal·lat (l'assistent pot comprovar les funcions amb `deno check`).
+- Les Edge Functions s'han pogut publicar sense Docker, també les que importen `../_shared/game-clock.ts`.
+- El `tsconfig.json` ja té `allowImportingTsExtensions: true` (per això `main.tsx` pot importar `./App.tsx`). `npx.cmd tsc --noEmit -p .` no dona errors.
+- Python no està instal·lat.
+
+**No cal tornar a explicar la instal·lació inicial de React, Supabase CLI, Deno o el vincle del projecte, llevat que aparegui un error nou.**
+
+### 4.2. Configuració del client Supabase
+
+El fitxer `.env.local` està configurat amb aquestes variables:
+
+```dotenv
+VITE_SUPABASE_URL=https://envdxghobrefcgcmvmlx.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<clau publishable real>
+```
+
+El fitxer `src/supabase.ts` crea el client Supabase amb aquestes variables.
+
+La configuració del client s'ha utilitzat correctament en el login, la creació de partides, l'entrada dels equips i totes les crides a Edge Functions i a la taula `games`.
+
+No cal tornar a crear el client Supabase ni demanar-me que torni a configurar aquestes variables si no apareix un error específic.
+
+### 4.3. Login del jutge
+
+- El compte del jutge ja s'ha creat a Supabase Auth.
+- El login del jutge funciona.
+- L'aplicació importa el client Supabase des de `src/supabase.ts`.
+- El frontend utilitza `Session` de `@supabase/supabase-js` per gestionar l'estat d'autenticació.
+- Les funcions del costat del jutge reben el token d'accés de la sessió automàticament amb `supabase.functions.invoke`.
+
+### 4.4. Creació de partides
+
+La Edge Function `create-game` està publicada i activa.
+
+Ja s'ha comprovat que la creació de partides funciona i retorna les dades necessàries:
+- Identificador de partida.
+- Codi de partida.
+- PIN per a l'equip A.
+- PIN per a l'equip B.
+
+La funció valida la sessió del jutge, genera un codi de partida i dos PINs aleatoris, emmagatzema els PINs com a hashes (PBKDF2) i crea els dos equips. La partida es crea amb `judge_id` del jutge, estat `setup` i durada 1200 segons.
+
+Les partides de prova ja creades no s'han de donar per defecte com a partides de producció. Les partides noves creades amb `create-game` encara NO tenen reptes (vegeu Fase 2); les partides de prova antigues en tenen 5 per equip (4.10). Amb una partida sense reptes, en acabar el temps sempre surt "Empat!" (0 a 0): confirmat.
+
+### 4.5. Entrada dels equips
+
+La Edge Function `join-game` està publicada i activa.
+
+Ja s'ha comprovat que:
+- El codi de partida, l'equip i el PIN es poden enviar a la funció.
+- La funció valida les dades.
+- La funció crea una sessió d'equip.
+- Retorna un token i les dades necessàries per continuar.
+- El frontend desa el token i les dades de l'equip a `sessionStorage` (claus `teamToken` i `teamKey`, entre d'altres).
+- Des del 24/10/2026 (confirmat), `join-game` permet entrar a una partida `finished` (abans la rebutjava): l'equip veu "Partida finalitzada", el resultat i el resum. Les fotos continuen bloquejades per `submit-photo`.
+- Si l'entrada falla, `handleTeamLogin` mostra el missatge en català que retorna el servidor (p. ex. "Codi, equip o PIN incorrecte."), no el genèric "Edge Function returned a non-2xx status code".
+
+La funció `handleTeamLogin(event)` crida `join-game` i després `get-team-game`.
+
+### 4.6. Carregar la partida després de l'entrada
+
+La Edge Function `get-team-game` està publicada i activa.
+
+Retorna: l'objecte `game`, l'objecte `team` (id, key, name), els `challenges` de l'equip, el bloc `clock` (amb `serverNow`), el bloc `result` (4.17) i els `submissions` de l'equip (id, challengeId, status, comment, receivedAt, photoUrl). `photoUrl` només s'omple (enllaç temporal d'una hora) quan la partida ha acabat; durant la partida és buit, per no alentir la consulta de cada 5 s.
+
+El nom de la partida es mostra a la pantalla de l'equip mitjançant `joinedGameName`. El nom de l'equip ara també ve del servidor (`team.name`).
+
+### 4.7. Consulta dels reptes des del servidor
+
+`get-team-game`:
+- Valida el token de sessió (hash SHA-256 a `team_sessions`, no revocada ni caducada).
+- Recupera l'equip i la partida.
+- Consulta els reptes de l'equip, ordenats per `position`, amb els camps `id,title,description,position,approved`.
+- Consulta els dos equips de la partida i els seus reptes aprovats per calcular el resultat.
+
+### 4.8. Taules de Supabase i columnes
+
+Les cinc taules existeixen: `games`, `teams`, `challenges`, `submissions`, `team_sessions`.
+
+`games`: `id` uuid, `judge_id` uuid (FK a auth.users, cascade), `name` text, `status` text (default `setup`; només admet `setup`, `active`, `paused`, `finished`), `duration_seconds` int (default 1200, > 0), `started_at`, `finished_at`, `created_at`, `game_code` text (únic, en majúscules), `clock_started_at` timestamptz i `elapsed_seconds` double precision (default 0).
+
+`teams`: `id` uuid, `game_id` uuid (FK, cascade), `team_key` text (només `A` o `B`, únic per partida), `name`, `access_code_hash`, `created_at`, `finished_at` timestamptz, `finish_reason` text (només `completed` o `timeout`), `finish_elapsed_seconds` double precision.
+
+`challenges`: `id` uuid, `team_id` uuid, `title` text, `description` text (nullable), `position` int4, `approved` bool, `created_at`.
+
+`submissions`: `id` uuid, `challenge_id` uuid (FK a challenges, cascade), `submitted_by_team` uuid (FK a teams, cascade), `photo_path` text (obligatori), `status` text (default `pending`; `pending`, `approved` o `rejected`), `judge_comment` text, `received_at` timestamptz (default now()), `reviewed_at` timestamptz.
+
+`team_sessions`: guarda `token_hash`, `team_id`, `expires_at`, `revoked_at` (hi ha més columnes que no hem revisat).
+
+No cal tornar a comprovar l'existència d'aquestes taules ni els noms de columnes, llevat que aparegui un error de consulta.
+
+### 4.9. Seguretat de la base de dades
+
+- RLS està activat a les taules.
+- La taula `games` té polítiques perquè el jutge pugui llegir, crear, actualitzar i eliminar les seves pròpies partides (el frontend del jutge llegeix `games` directament per al selector de partides).
+- Les altres taules no tenen polítiques de client; l'accés dels equips i les operacions del jutge sobre equips, reptes i enviaments es gestionen mitjançant Edge Functions.
+- Les sessions dels equips es guarden a `team_sessions` amb un hash del token.
+- Les claus secretes s'utilitzen al servidor, no al frontend.
+
+No s'han de concedir permisos amplis al client per resoldre errors de manera ràpida. Qualsevol canvi de seguretat s'ha de revisar amb cura.
+
+### 4.10. Reptes reals a la pantalla dels equips (confirmat)
+
+- `handleTeamLogin` i `refreshTeamFromServer` assignen a l'equip corresponent (A o B) els reptes i el nom retornats per `get-team-game`, mitjançant `setTeams`.
+- Es poden triar reptes al desplegable i pujar fotografies.
+- S'han inserit 5 reptes de prova a `challenges` per als equips antics que no en tenien: "Una bicicleta vermella", "Una estàtua", "Un pas de zebra", "Un gos amb el seu amo", "Una font".
+- Decisió de disseny: els reptes es mostren amb un punt (•) davant, no amb números ni amb l'id (també al resum).
+
+### 4.11. Emmagatzematge de fotografies (confirmat)
+
+- Bucket de Supabase Storage `submission-photos`, creat amb 0 polítiques (només hi accedeixen les Edge Functions). Comprovar que és privat i, si es vol, el límit de mida (previst 10 MB) i els tipus d'imatge (JPEG, PNG, WebP); no s'ha confirmat que aquests dos paràmetres s'hagin posat.
+- Edge Function `submit-photo`: rep `token`, `challengeId` i `photo` (formulari multipart), valida la sessió de l'equip, que el repte sigui seu i no estigui aprovat, que no tingui ja una foto pendent, i que el fitxer sigui JPEG/PNG/WebP de com a màxim 10 MB. Puja la foto a `submission-photos/<game_id>/<team_id>/<uuid>.<ext>` i crea la fila a `submissions`. Si falla la inserció, esborra la foto.
+- Frontend: `uploadPhotoToServer(challengeId, file)` a `App.tsx` es crida dins d'`onPhotoSelected`.
+- `submit-photo` comprova al servidor que la partida estigui `active` (si no, 409 "La partida no està en marxa.") i que l'equip no hagi acabat (per `getTeamClock`, 409 "El teu equip ja ha acabat la partida.").
+
+### 4.12. Panell del jutge amb dades del servidor (confirmat)
+
+- Selector "Partida que supervises" (`judgeGames`, `selectedGameId` a `App.tsx`): llegeix les partides del jutge directament de `games`, ordenades per `created_at`; selecciona automàticament la partida recent creada.
+- Edge Function `judge-list-submissions` (JWT del jutge, rep `gameId`): comprova que la partida és del jutge i retorna `game: { status, serverNow }`, equips amb reptes i `clock` (`gameStatus`, `finished`, `finishReason`, `remainingSeconds`), i enviaments amb enllaços temporals d'una hora a les fotos (el bucket és privat).
+- `loadServerSubmissions` a `App.tsx` la crida quan canvia la partida seleccionada i, des del 24/10/2026, **cada 5 s** mentre la vista és la del jutge (confirmat: les fotos noves apareixen soles). Desa els enviaments a `serverSubmissions` i l'estat i els rellotges a `judgeServer`.
+- Component `src/screens/ServerModerationSection.tsx` ("Fotos del servidor"): mostra les fotos (amb equip, repte, data, estat i motiu del rebuig) i els botons Aprovar i Rebutjar (el rebuig demana un motiu obligatori de fins a 500 caràcters). El text del motiu no s'esborra quan arriba una actualització.
+- Edge Function `review-submission` (JWT del jutge): vegeu secció 5. `handleServerReview` a `App.tsx` la crida i recarrega la llista.
+- La moderació antiga (local) i l'historial local continuen a la pantalla, però ja no reben res (es retiraran al pas 6).
+
+### 4.13. Pantalla de l'equip amb dades del servidor (confirmat)
+
+- `refreshTeamFromServer` a `App.tsx` crida `get-team-game` cada 5 segons mentre la vista és `teamA` o `teamB`: actualitza el nom i els reptes de l'equip, i desa `teamSubmissions`, `teamClock` i `teamResult`.
+- `hasPending` de `TeamPlayerScreen` surt dels enviaments del servidor (`teamSubmissions`).
+- La línia `simulateSubmission(team.id, challengeId, file);` a `onPhotoSelected` està comentada.
+- Confirmat amb dos navegadors: les aprovacions del jutge arriben a l'equip en uns 5 segons.
+
+### 4.14. Estat de la partida al servidor: iniciar, pausar i reiniciar
+
+- Edge Function `judge-set-game-state` (JWT del jutge): rep `gameId` i `action` (`start` o `pause`). Comprova que la partida és del jutge. `start` serveix per iniciar i reprendre (de `setup` o `paused` a `active`; desa `clock_started_at` i, la primera vegada, `started_at`); `pause` suma el temps transcorregut a `elapsed_seconds`, buida `clock_started_at` i passa a `paused`. Les actualitzacions són protegides contra canvis simultanis (409 si l'estat ha canviat).
+- Frontend (confirmat): el botó Iniciar/Pausar/Reprendre crida `handleJudgeStartPause`, que fa `syncGameState(action)` i recarrega el panell de seguida. El text del botó i el bloqueig (desactivat si la partida és `finished`) surten de l'estat del servidor. `startGame` i `pauseGame` (locals) encara es criden, però ja no criden el servidor.
+- Reinici (confirmat): Edge Function `judge-reset-game` i `handleJudgeReset` al botó Reiniciar (amb confirmació). Provat: la partida torna a l'estat inicial al jutge i a l'equip, i les fotos de la partida s'esborren del bucket.
+- Els `console.log` temporals (`Estat de la partida al servidor:` i `Rellotge de l'equip:`) ja s'han tret.
+
+### 4.15. Reorganització del codi (resum)
+
+Vegeu secció 7.
+
+### 4.16. Rellotge compartit al servidor (confirmat)
+
+- Fitxer `supabase/functions/_shared/game-clock.ts`: constant `BONUS_SECONDS = 180`, `getElapsedSeconds(game, nowMs)` (acumulat + temps des de l'última arrencada si la partida és `active`), `getTeamClock(game, team, approvedCount, nowMs)`, que retorna `gameStatus`, `finished`, `finishReason` i `remainingSeconds` (durada + 180 s per repte aprovat − temps transcorregut; si l'equip ha acabat, queda congelat a `finish_elapsed_seconds`; si no ha acabat, la partida no és `setup` i el temps és 0, es considera acabat per `timeout`), i `getGameResult` (4.17). No escriu res a la base de dades.
+- Les funcions que l'usen: `get-team-game`, `judge-list-submissions`, `submit-photo` i `review-submission`.
+- **Frontend (Fase 5, pas 5, confirmat):** la pantalla de l'equip i el panell del jutge mostren el temps, l'estat i el final a partir del servidor. Guarden `remainingSeconds` i el moment en què el navegador ha rebut la resposta, i compten enrere localment cada segon entre les consultes de 5 s (es fa servir l'hora de recepció i no `serverNow`, perquè el rellotge del dispositiu pot anar desajustat).
+  - Equip: estats `teamClock`, `teamNow`, `teamFinished`; `TeamPlayerScreen` rep `timeText`, `running`, `gameStarted` i una prop nova `finished` (substitueix `team.finished`). Abans de la primera resposta, el temps es mostra `--:--`.
+  - Jutge: estats `judgeServer`, `judgeNow`; valors derivats `judgeStatus`, `judgeRunning`, `judgeStarted`, `judgeTeams`, `judgeFinished`, `judgePendingCounts`. `JudgeHeader` i `JudgeTeamGrid` reben aquestes dades. `JudgeTeamGrid` rep ara `pendingCounts` (fotos pendents del servidor) en lloc de `submissions`. Motius de final en català: "Llista completada", "Temps esgotat", "Partida finalitzada".
+
+### 4.17. Resultat de la partida i resum (confirmat)
+
+- `getGameResult(gameStatus, teams)` a `_shared/game-clock.ts` retorna `{ over, draw, byCompletion, winnerKey, winnerName, winnerApproved }`. La partida s'ha acabat si és `finished` o si tots els equips han acabat. Si un equip ha completat la llista, guanya; si no, guanya qui té més reptes aprovats; si empaten, és empat.
+- `get-team-game` retorna el bloc `result`. El modal de l'equip ("Heu guanyat!", "Empat!", "Partida finalitzada") surt de `teamResult` i no apareix a la pantalla de login.
+- `SummaryScreen` fa servir els enviaments del servidor (`teamSubmissions`, amb `photoUrl` quan la partida ha acabat), el títol del repte es busca per `challengeId`, i `teamWon`/`isDraw` surten de `teamResult`.
+- Confirmat: victòria per llista completada (modal i resum amb fotos als dos equips) i empat per temps esgotat amb una partida sense reptes. La victòria per punts (temps esgotat amb reptes aprovats diferents) encara no s'ha provat.
+- El panell del jutge no té modal de resultat (es podria afegir amb `getGameResult` a `judge-list-submissions`).
+
+---
+
+## 5. Edge Functions
+
+Les funcions utilitzen variables de servidor com `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` i, les del jutge, `SUPABASE_PUBLISHABLE_KEYS`. No demanar-me les claus ni posar-les a `App.tsx`. Cada carpeta de funció té `index.ts`, `deno.json` i `.npmrc` (les noves es creen copiant els dos últims de `judge-set-game-state`).
+
+**Funcions d'equip i públiques (sessió d'equip amb token propi):**
+- `create-game`: crea la partida i els equips A i B, amb el codi i els PINs (JWT del jutge).
+- `join-game`: valida codi, equip i PIN i crea una sessió d'equip (té `verify_jwt = false` a `config.toml`). Admet partides `finished`.
+- `validate-team-session`: valida el token personalitzat de sessió de l'equip.
+- `get-team-game`: dades de la partida, l'equip, els reptes, els enviaments (amb `photoUrl` si la partida ha acabat), el rellotge (`clock`, `serverNow`) i el resultat (`result`).
+- `submit-photo`: pujada d'una foto d'un equip (4.11); rebutja si la partida no és `active` o l'equip ha acabat.
+
+**Funcions del jutge (JWT de Supabase Auth, validat amb `auth.getUser`, i comprovant que la partida és del jutge per `judge_id`):**
+- `judge-list-submissions`: equips (amb `clock`), reptes, `game` (estat i `serverNow`) i enviaments amb enllaços temporals a les fotos.
+- `review-submission`: aprova o rebutja un enviament. No es pot aprovar si la partida ja és `finished` ni si l'equip ja ha acabat (per temps esgotat o per llista completada), ni un repte ja aprovat; en aprovar l'últim repte pendent d'un equip es desa `teams.finished_at`, `finish_reason = 'completed'` i `finish_elapsed_seconds`, i la partida passa a `finished` (`finished_at`, `elapsed_seconds` actualitzat, `clock_started_at` buit). Si falla algun pas, es desfà l'aprovació.
+- `judge-set-game-state`: inicia, pausa i reprèn la partida.
+- `judge-reset-game` (publicada i confirmada): rep `gameId`. Torna la partida a `setup` (`started_at`, `finished_at`, `clock_started_at` buits, `elapsed_seconds = 0`; manté `duration_seconds`), esborra els enviaments dels dos equips, desmarca tots els reptes, buida els camps de final dels equips i esborra les fotos de la partida del bucket (carpetes `<game_id>/<team_id>/`, també les fotos òrfenes de proves antigues). Primer posa la partida a `setup`, perquè no entrin fotos noves mentre es reinicia. Si falla l'esborrat de fotos, la partida queda reiniciada igualment i només es registra l'error. Les sessions dels equips no es tanquen. Retorna `removedPhotos`.
+
+Patró d'autenticació dels equips: token personalitzat → hash SHA-256 → fila a `team_sessions` no revocada ni caducada → equip → partida. Patró del jutge: capçalera `Authorization: Bearer <token>` → `auth.getUser` amb la clau publishable → client amb clau secreta (`admin`) → comprovar `judge_id`. Les respostes d'error van en català i usen els mateixos CORS que la resta.
+
+El fitxer `supabase/config.toml` només inclou:
+
+```toml
+[functions.join-game]
+enabled = true
+verify_jwt = false
+```
+
+No s'ha afegit cap entrada a `config.toml` per a les altres funcions (funcionen amb la configuració per defecte).
+
+---
+
+## 6. Estat actual del codi de React
+
+- `Challenge.id` és `number | string` (a la pràctica, UUID string). `Submission.challengeId` també. `ServerSubmission` (a `types.ts`) descriu els enviaments del servidor per al jutge. Els enviaments de l'equip (`teamSubmissions`) tenen el seu tipus dins d'`App.tsx` i de `SummaryScreen.tsx` (`TeamSubmission`).
+- `selectedChallengeIds` és `Record<string, string>` (cadena buida = cap repte triat).
+- `createTeam` no genera reptes de prova (rep `challenges` per paràmetre).
+- **Ja usen el servidor:** login del jutge, creació de partida, entrada dels equips, reptes i aprovacions, estat pendent de l'equip, pujada de fotos, llista i revisió de fotos del jutge (cada 5 s), selector de partida, iniciar/pausar/reprendre, temps, estat i final a les dues pantalles, modal de resultat i resum de l'equip, i el reinici de la partida.
+- **Encara existeixen en local (ja no es mostren, es retiren al pas 6):** `teams` (part local: `seconds`, `finished`), `submissions` (antics enviaments locals), `running`, `gameStarted`, `now`, `gameStartReference`, `getDisplayedSeconds`, `reviewSubmission`, `simulateSubmission`, `winner`, `scoreWinner`, `gameCompletedByWinner`, `allTeamsFinished`, `startGame`, `pauseGame`, `resetGame`, el `localStorage` (`gimkana-game-state`), la secció de moderació antiga "Fotos pendients" i l'"Historial de revisions" local.
+- Funcions del servidor a `App.tsx`: `uploadPhotoToServer`, `syncGameState`, `loadServerSubmissions`, `handleServerReview`, `refreshTeamFromServer`, `handleJudgeStartPause`, `handleJudgeReset`, `getTeamRemainingSeconds`.
+
+---
+
+## 7. Reorganització del codi
+
+Decisió: he deixat de netejar el codi per prioritzar la funcionalitat. La resta es farà més endavant, si cal.
+
+Fet i confirmat que funciona:
+1. `src/types.ts`
+2. `src/utils.ts`
+3. `src/screens/HomeScreen.tsx`
+4. `src/screens/TeamLoginScreen.tsx`
+5. Eliminats els `console.log` amb el token.
+6. `src/screens/JudgeLoginScreen.tsx`
+7. `src/screens/SummaryScreen.tsx` (ara amb dades del servidor)
+8. Ids seleccionats a text.
+9. Reptes amb punts (•).
+10. `src/screens/TeamPlayerScreen.tsx` (prop nova `finished`).
+11. `src/screens/CreateGameSection.tsx` (formulari "Nova partida").
+12. `src/screens/JudgeHeader.tsx` (capçalera i introducció del panell; encara amb alguns textos en castellà: "Panel de control del monitor", "por foto").
+13. `src/screens/JudgeTeamGrid.tsx` (targetes dels equips del panell; ara rep `pendingCounts`).
+14. `src/screens/ServerModerationSection.tsx` (secció de moderació del servidor).
+
+Sense extreure (continuen dins d'`App.tsx`): la barra de control (Iniciar/Pausar/Reiniciar), la moderació antiga (local), l'historial, el modal de resultat i el temporitzador local.
+
+---
+
+## 8. Problemes coneguts
+
+- **Durada de les partides de prova:** el botó Reiniciar manté `duration_seconds`; per canviar-la (p. ex. 60 s per provar el final per temps) cal fer servir la consulta SQL de la secció 11. Atenció: si la taula `games` no es reinicia (estat `finished`), les pantalles continuen mostrant el resultat antic.
+- **Codi local antic** encara actiu per dins (secció 6): el `useEffect` d'autoguardat escriu a `localStorage` cada 250 ms mentre `running` local és cert, i dues pestanyes del mateix navegador es trepitgen aquest estat. Ja no afecta el que es mostra, però s'ha de retirar (pas 6).
+- L'equip no veu el motiu d'un rebuig durant la partida (només el veu al resum final i el jutge).
+- L'historial del jutge ("Historial de revisions") encara és local i surt buit.
+- Els enllaços de les fotos caduquen als 60 minuts; com que les consultes són cada 5 s, es renoven sols mentre la pantalla és oberta.
+- L'aprovació del jutge té un petit retard (arrencada en fred de les funcions).
+- Fotos òrfenes al bucket de proves antigues (de files de `submissions` esborrades a mà): `judge-reset-game` les esborra en reiniciar cada partida. La consulta SQL de la secció 11 no esborra fitxers.
+- Textos barrejats en castellà i català (p. ex. "Equipo A" als equips locals, "Tiempo agotado", "Panel de control del monitor", "por foto"); la interfície ha de ser en català (pas 8).
+- El peu de pàgina del panell del jutge diu "Prototipo local: los datos se reinician al recargar la página", que ja no és cert.
+- El document de requisits preveu accés del jutge amb codi d'administrador; l'app fa servir correu i contrasenya (Supabase Auth). Decidit mantenir correu i contrasenya.
+- **Git:** no hi ha cap `.gitignore`. Per això el repositori inclou `node_modules` (més de 12.000 fitxers), `dist`, `supabase/.temp`, fitxers antics (`src/App.js`, `src/main.js`, `src/App.backup.txt`, `error.txt`) i `.env.local`. El repositori ja és a GitHub (`origin/main`). `.env.local` només té la URL i la clau publishable (que de totes maneres és pública, perquè va dins del frontend), no cap clau secreta. Cal decidir si s'afegeix un `.gitignore` i es treuen aquests fitxers del seguiment (sense esborrar-los de l'ordinador), i si el repositori de GitHub és públic o privat.
+
+---
+
+## 9. Què falta fer
+
+### Fase 1 — Reptes a la pantalla dels equips: FET (4.10)
+
+### Fase 1b — Reorganització del codi: aturada per decisió pròpia (secció 7)
+
+### Fase 2 — Biblioteca de reptes i creació de partides (pendent; idea meva)
+Vull una pantalla separada, accessible des de la del jutge, per crear la partida i decidir quins reptes té cada equip, escollint d'una llista de reptes ja creats. També vull un formulari per crear reptes manualment.
+Pla provisional:
+1. Crear una taula nova per a la biblioteca de reptes (títol, descripció) i un formulari per afegir-ne.
+2. Pantalla de creació de partida amb selecció dels reptes de cada equip.
+3. Adaptar `create-game` perquè rebi els reptes triats i en copiï a `challenges` per a cada equip (còpia, perquè canviar la biblioteca no alteri partides ja creades).
+Cal vigilar RLS: el jutge hauria de gestionar la biblioteca mitjançant polítiques pròpies o Edge Functions.
+
+### Fase 3 — Desar els enviaments i moderar-los amb dades reals: GAIRE BÉ FET
+Fet: enviaments a `submissions`, llista i revisió del jutge, aprovació de reptes al servidor, pantalla de l'equip sincronitzada, resum de l'equip amb dades del servidor. Pendent: que l'equip vegi el motiu del rebuig durant la partida, i que l'historial del jutge usi dades del servidor.
+
+### Fase 4 — Emmagatzematge permanent de fotografies: FET
+Bucket privat, pujada per Edge Function i enllaços temporals. Pendent de decidir: compressió abans de pujar, límit de mida i tipus de fitxer al bucket (vegeu 4.11).
+
+### Fase 5 — Temporitzador i estat de la partida compartits (EN CURS: passos 1-5 i 7 fets; queden el 6 i el 8)
+
+Disseny acordat:
+- Un sol rellotge per partida al servidor. Temps transcorregut = `elapsed_seconds` + (ara − `clock_started_at`, només si l'estat és `active`).
+- Temps restant d'un equip = `duration_seconds` + 180 s per cada repte aprovat − temps transcorregut. El bonus es calcula, no es guarda.
+- Estats de `games.status`: `setup`, `active`, `paused`, `finished` (no existeix `running`).
+- Regles: el primer equip que completa tota la seva llista guanya i la partida s'acaba per a tothom; un equip sense temps acaba per temps esgotat i no se li pot aprovar cap foto; si els dos equips es queden sense temps, guanya qui té més reptes aprovats i si empaten és empat.
+- Quan un equip completa la llista: desar `teams.finished_at`, `finish_reason = 'completed'` i `finish_elapsed_seconds`, i passar la partida a `finished`.
+- El final per temps esgotat es calcula en llegir (derivat), sense cap procés en segon pla.
+- El frontend rep `remainingSeconds` i compta enrere localment entre consultes de 5 s.
+
+Passos:
+1. FET i confirmat: rellotge a `get-team-game` (4.16).
+2. FET i confirmat: `judge-list-submissions` retorna l'estat de la partida i el rellotge de cada equip.
+3. FET i confirmat: `submit-photo` exigeix partida `active` i equip no acabat.
+4. FET i confirmat: `review-submission` bloqueja l'aprovació si l'equip ja ha acabat i desa el final de l'equip i la partida en aprovar l'últim repte.
+5. FET i confirmat: frontend de l'equip i del jutge (temps, estat, final, botons, modal de resultat i resum) a partir del servidor (4.16, 4.17). Commit `8188f8f`.
+6. **PENDENT (següent pas):** retirar el temporitzador local i l'estat local de partida (secció 6: `localStorage`, `running`, moderació antiga, historial local, etc.). `handleJudgeReset` encara crida `resetGame` local: treure aquesta crida en aquest pas.
+7. FET i confirmat: reinici al servidor amb `judge-reset-game` i el botó Reiniciar (`handleJudgeReset`, amb confirmació). Decisió presa: els enviaments antics i les seves fotos s'esborren (no s'arxiven).
+8. PENDENT: textos, passar tota la interfície a català.
+
+### Fase 6 — Temps real
+Realtime no està configurat; es fa servir consulta cada 5 s (equip i jutge). Els tokens dels equips són personalitzats, no JWT de Supabase Auth: no s'ha de donar per fet que poden subscriure's directament; cal dissenyar l'accés de manera segura (o mantenir la consulta periòdica).
+
+### Fase 7 — Proves i publicació
+Provar jutge i dos equips amb dispositius diferents de debò (ara ja és possible, perquè el rellotge i l'estat són del servidor), recàrregues i permisos; publicar a Vercel/Netlify amb variables d'entorn de producció i provar amb la URL pública (la càmera funciona millor amb HTTPS). El projecte ja és a GitHub; cal endreçar el repositori abans (vegeu Git a la secció 8).
+
+---
+
+## 10. Punt exacte per continuar en un xat nou
+
+**No tornis a configurar Supabase des de zero.** Ja tenim el projecte vinculat, el client configurat, el login del jutge, la creació de partides, l'entrada dels equips, el bucket de fotos, les Edge Functions (amb el rellotge compartit, el resultat i les regles de final al servidor), el panell del jutge i la pantalla de l'equip sincronitzats cada 5 s, i el temps, l'estat, el final i el resultat de la partida sortint del servidor, tot funcionant i provat.
+
+Estàs al xat de VS Code amb accés al repositori: llegeix tu mateix `src/App.tsx` i la resta de fitxers abans de proposar canvis.
+
+**Següent pas:** decidir si s'endreça Git (`.gitignore`, secció 8) i després Fase 5, pas 6: retirar el codi local antic (secció 6), provant que tot continua funcionant.
+
+---
+
+## 11. Consulta SQL de reinici manual (SQL Editor de Supabase)
+
+Normalment n'hi ha prou amb el botó Reiniciar del jutge. Aquesta consulta serveix per canviar la durada d'una partida de prova (el botó la manté). Canviar només les dues primeres variables. Esborra els enviaments d'aquella partida (els fitxers del bucket es queden). Si el codi no existeix, dona l'error "No hi ha cap partida amb el codi …". No seleccionar text abans de prémer Run (si no, només s'executa la part seleccionada).
+
+```sql
+do $$
+declare
+  v_code text := 'CODI';      -- codi de la partida de prova
+  v_duration int := 60;       -- durada en segons (1200 = 20 min)
+  v_game uuid;
+begin
+  select id into v_game from games where game_code = upper(v_code);
+
+  if v_game is null then
+    raise exception 'No hi ha cap partida amb el codi %', v_code;
+  end if;
+
+  delete from submissions
+  where submitted_by_team in (select id from teams where game_id = v_game);
+
+  update challenges
+  set approved = false
+  where team_id in (select id from teams where game_id = v_game);
+
+  update teams
+  set finished_at = null,
+      finish_reason = null,
+      finish_elapsed_seconds = null
+  where game_id = v_game;
+
+  update games
+  set status = 'setup',
+      started_at = null,
+      finished_at = null,
+      clock_started_at = null,
+      elapsed_seconds = 0,
+      duration_seconds = v_duration
+  where id = v_game;
+end $$;
+```
