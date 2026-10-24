@@ -1,4 +1,8 @@
-import { getTeamClock } from "../_shared/game-clock.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { getGameResult, getTeamClock } from "../_shared/game-clock.ts";
+
+const BUCKET = "submission-photos";
+const SIGNED_URL_SECONDS = 60 * 60;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -141,7 +145,7 @@ Deno.serve(async (req) => {
     const challenges = await challengesResponse.json();
 
     const submissionsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/submissions?submitted_by_team=eq.${team.id}&select=id,challenge_id,status,judge_comment,received_at&order=received_at.asc`,
+      `${supabaseUrl}/rest/v1/submissions?submitted_by_team=eq.${team.id}&select=id,challenge_id,photo_path,status,judge_comment,received_at&order=received_at.asc`,
       { headers },
     );
 
@@ -155,8 +159,85 @@ Deno.serve(async (req) => {
       (challenge: { approved: boolean }) => challenge.approved,
     ).length;
 
-    const clock = getTeamClock(game, team, approvedCount, Date.now());
+    const nowMs = Date.now();
+    const clock = getTeamClock(game, team, approvedCount, nowMs);
 
+    // Equips de la partida i reptes aprovats de cadascun, per calcular
+    // el resultat (cal conèixer també l'altre equip).
+    const gameTeamsResponse = await fetch(
+      `${supabaseUrl}/rest/v1/teams?game_id=eq.${game.id}&select=id,team_key,name,finished_at,finish_reason,finish_elapsed_seconds`,
+      { headers },
+    );
+
+    if (!gameTeamsResponse.ok) {
+      throw new Error("No s'han pogut consultar els equips de la partida.");
+    }
+
+    const gameTeams = await gameTeamsResponse.json();
+    const gameTeamIds = gameTeams.map((item: { id: string }) => item.id);
+
+    const approvedResponse = await fetch(
+      `${supabaseUrl}/rest/v1/challenges?team_id=in.(${gameTeamIds.join(",")})&approved=is.true&select=team_id`,
+      { headers },
+    );
+
+    if (!approvedResponse.ok) {
+      throw new Error("No s'han pogut consultar els reptes aprovats.");
+    }
+
+    const approvedRows: { team_id: string }[] = await approvedResponse.json();
+
+    const result = getGameResult(
+      game.status,
+      gameTeams.map(
+        (item: {
+          id: string;
+          team_key: string;
+          name: string;
+          finished_at: string | null;
+          finish_reason: string | null;
+          finish_elapsed_seconds: number | null;
+        }) => {
+          const count = approvedRows.filter(
+            (row) => row.team_id === item.id,
+          ).length;
+
+          return {
+            key: item.team_key,
+            name: item.name,
+            approvedCount: count,
+            clock: getTeamClock(game, item, count, nowMs),
+          };
+        },
+      ),
+    );
+
+    // Enllaços temporals a les fotos, només quan la partida ha acabat
+    // (els fa servir el resum de l'equip).
+    const urlByPath = new Map<string, string>();
+    const paths = submissions.map(
+      (item: { photo_path: string }) => item.photo_path,
+    );
+
+    if (result.over && paths.length > 0) {
+      const admin = createClient(supabaseUrl, secretKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+
+      const { data: signed, error: signedError } = await admin.storage
+        .from(BUCKET)
+        .createSignedUrls(paths, SIGNED_URL_SECONDS);
+
+      if (signedError) {
+        throw new Error("No s'han pogut generar els enllaços de les fotos.");
+      }
+
+      for (const item of signed ?? []) {
+        if (item.path && item.signedUrl) {
+          urlByPath.set(item.path, item.signedUrl);
+        }
+      }
+    }
 
     return new Response(
       JSON.stringify({
@@ -167,11 +248,13 @@ Deno.serve(async (req) => {
           name: team.name,
         },
         challenges,
-        clock: { ...clock, serverNow: new Date().toISOString() },
+        clock: { ...clock, serverNow: new Date(nowMs).toISOString() },
+        result,
         submissions: submissions.map(
           (item: {
             id: string;
             challenge_id: string;
+            photo_path: string;
             status: string;
             judge_comment: string | null;
             received_at: string;
@@ -181,6 +264,7 @@ Deno.serve(async (req) => {
             status: item.status,
             comment: item.judge_comment ?? "",
             receivedAt: item.received_at,
+            photoUrl: urlByPath.get(item.photo_path) ?? "",
           }),
         ),
       }),

@@ -69,8 +69,49 @@ export default function App() {
       status: "pending" | "approved" | "rejected";
       comment: string;
       receivedAt: string;
+      photoUrl?: string;
     }[]
   >([]);
+
+  // Resultat de la partida calculat pel servidor (get-team-game).
+  const [teamResult, setTeamResult] = useState<{
+    over: boolean;
+    draw: boolean;
+    byCompletion: boolean;
+    winnerKey: string | null;
+    winnerName: string | null;
+    winnerApproved: number;
+  } | null>(null);
+
+  // Rellotge de l'equip tal com el retorna get-team-game, amb el moment
+  // en què el navegador l'ha rebut (per comptar enrere entre consultes).
+  const [teamClock, setTeamClock] = useState<{
+    gameStatus: string;
+    finished: boolean;
+    finishReason: string | null;
+    remainingSeconds: number;
+    receivedAt: number;
+  } | null>(null);
+  const [teamNow, setTeamNow] = useState(Date.now());
+
+  // Estat de la partida i rellotges dels equips per al panell del jutge,
+  // tal com els retorna judge-list-submissions.
+  const [judgeServer, setJudgeServer] = useState<{
+    status: string;
+    teams: {
+      key: string;
+      name: string;
+      clock: {
+        gameStatus: string;
+        finished: boolean;
+        finishReason: string | null;
+        remainingSeconds: number;
+      };
+      challenges: Challenge[];
+    }[];
+    receivedAt: number;
+  } | null>(null);
+  const [judgeNow, setJudgeNow] = useState(Date.now());
 
   useEffect(() => {
     if (!session) {
@@ -112,6 +153,7 @@ export default function App() {
       async function loadServerSubmissions() {
     if (!selectedGameId) {
       setServerSubmissions([]);
+      setJudgeServer(null);
       return;
     }
 
@@ -128,6 +170,12 @@ export default function App() {
     }
 
     setServerSubmissions(data.submissions ?? []);
+    setJudgeServer({
+      status: data.game?.status ?? "setup",
+      teams: data.teams ?? [],
+      receivedAt: Date.now(),
+    });
+    setJudgeNow(Date.now());
   }
 
   useEffect(() => {
@@ -138,6 +186,78 @@ export default function App() {
 
     loadServerSubmissions();
   }, [session?.user.id, selectedGameId]);
+
+  // Mentre el jutge és al panell, tornem a demanar les fotos cada 5 s.
+  useEffect(() => {
+    if (currentView !== "judge" || !session || !selectedGameId) return;
+
+    const interval = window.setInterval(loadServerSubmissions, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [currentView, session?.user.id, selectedGameId]);
+
+  // Compte enrere local del panell del jutge entre les consultes de 5 s.
+  useEffect(() => {
+    if (currentView !== "judge" || judgeServer?.status !== "active") return;
+
+    const interval = window.setInterval(() => setJudgeNow(Date.now()), 1000);
+
+    return () => window.clearInterval(interval);
+  }, [currentView, judgeServer?.status]);
+
+  const judgeStatus = judgeServer?.status ?? "setup";
+  const judgeRunning = judgeStatus === "active";
+  const judgeStarted = judgeStatus !== "setup";
+
+  const judgeTeams: Team[] = (judgeServer?.teams ?? []).map((item) => {
+    const sinceReceived =
+      judgeRunning && !item.clock.finished
+        ? Math.max(0, judgeNow - (judgeServer?.receivedAt ?? judgeNow)) / 1000
+        : 0;
+    const seconds = Math.max(0, item.clock.remainingSeconds - sinceReceived);
+
+    const finishReason =
+      item.clock.finishReason === "completed"
+        ? "Llista completada"
+        : item.clock.finishReason === "timeout" || (judgeRunning && seconds <= 0)
+          ? "Temps esgotat"
+          : judgeStatus === "finished"
+            ? "Partida finalitzada"
+            : null;
+
+    return {
+      id: item.key,
+      name: item.name,
+      seconds,
+      challenges: item.challenges,
+      finished: finishReason !== null,
+      finishReason,
+    };
+  });
+
+  const judgeFinished =
+    judgeStatus === "finished" ||
+    (judgeTeams.length > 0 && judgeTeams.every((team) => team.finished));
+
+  const judgePendingCounts: Record<string, number> = {};
+  for (const submission of serverSubmissions) {
+    if (submission.status === "pending") {
+      judgePendingCounts[submission.teamKey] =
+        (judgePendingCounts[submission.teamKey] ?? 0) + 1;
+    }
+  }
+
+  async function handleJudgeStartPause() {
+    if (judgeRunning) {
+      pauseGame();
+      await syncGameState("pause");
+    } else {
+      startGame();
+      await syncGameState("start");
+    }
+
+    await loadServerSubmissions();
+  }
 
     async function handleServerReview(
     submissionId: string,
@@ -187,11 +307,23 @@ export default function App() {
 
     setTeams((currentTeams) =>
       currentTeams.map((item) =>
-        item.id === teamKey ? { ...item, challenges: loadedChallenges } : item
+        item.id === teamKey
+          ? {
+              ...item,
+              name: data.team?.name ?? item.name,
+              challenges: loadedChallenges,
+            }
+          : item
       )
     );
 
     setTeamSubmissions(data.submissions ?? []);
+    setTeamResult(data.result ?? null);
+
+    if (data.clock) {
+      setTeamClock({ ...data.clock, receivedAt: Date.now() });
+      setTeamNow(Date.now());
+    }
   }
 
   useEffect(() => {
@@ -203,6 +335,36 @@ export default function App() {
 
     return () => window.clearInterval(interval);
   }, [currentView]);
+
+  // Compte enrere local de l'equip entre les consultes de 5 s.
+  useEffect(() => {
+    if (currentView !== "teamA" && currentView !== "teamB") return;
+    if (teamClock?.gameStatus !== "active" || teamClock.finished) return;
+
+    const interval = window.setInterval(() => setTeamNow(Date.now()), 1000);
+
+    return () => window.clearInterval(interval);
+  }, [currentView, teamClock?.gameStatus, teamClock?.finished]);
+
+  function getTeamRemainingSeconds() {
+    if (!teamClock) return 0;
+
+    if (teamClock.gameStatus !== "active" || teamClock.finished) {
+      return teamClock.remainingSeconds;
+    }
+
+    const sinceReceived = Math.max(0, teamNow - teamClock.receivedAt) / 1000;
+    return Math.max(0, teamClock.remainingSeconds - sinceReceived);
+  }
+
+  const teamRemainingSeconds = getTeamRemainingSeconds();
+
+  const teamFinished = Boolean(
+    teamClock &&
+      (teamClock.finished ||
+        teamClock.gameStatus === "finished" ||
+        (teamClock.gameStatus === "active" && teamRemainingSeconds <= 0))
+  );
 
   const [savedState] = useState(() => {
     try {
@@ -373,8 +535,6 @@ useEffect(() => {
   function startGame() {
     if (allTeamsFinished) return;
 
-    syncGameState("start");
-
     gameStartReference.current = Date.now();
     setNow(Date.now());
     setGameStarted(true);
@@ -383,8 +543,6 @@ useEffect(() => {
 
   function pauseGame() {
     if (!running) return;
-
-    syncGameState("pause");
 
     const timestamp = Date.now();
     const elapsed =
@@ -683,11 +841,17 @@ function simulateSubmission(
         });
 
         if (error || !data?.token) {
-          setTeamLoginError(
-            data?.error ||
-              error?.message ||
-              "El servidor no ha retornat un token vàlid."
-          );
+          let message = "El servidor no ha retornat un token vàlid.";
+
+          if (error?.context instanceof Response) {
+            try {
+              message = (await error.context.json()).error ?? message;
+            } catch {
+              // La resposta no és JSON: mantenim el missatge genèric.
+            }
+          }
+
+          setTeamLoginError(message);
           return;
         }
 
@@ -713,6 +877,14 @@ function simulateSubmission(
 
         setJoinedGameName(gameData.game.name);
 
+        if (gameData.clock) {
+          setTeamClock({ ...gameData.clock, receivedAt: Date.now() });
+          setTeamNow(Date.now());
+        }
+
+        setTeamSubmissions(gameData.submissions ?? []);
+        setTeamResult(gameData.result ?? null);
+
         // Carreguem els reptes que venen de Supabase
         const loadedChallenges = (gameData.challenges ?? []).map(
           (challenge: {
@@ -732,6 +904,7 @@ function simulateSubmission(
             item.id === team
               ? {
                   ...item,
+                  name: gameData.team?.name ?? item.name,
                   challenges: loadedChallenges,
                 }
               : item
@@ -884,9 +1057,14 @@ const scoreWinner =
                 key={team.id}
                 team={team}
                 joinedGameName={joinedGameName}
-                timeText={formatTime(getDisplayedSeconds(team))}
-                running={running}
-                gameStarted={gameStarted}
+                timeText={
+                  teamClock ? formatTime(teamRemainingSeconds) : "--:--"
+                }
+                running={teamClock?.gameStatus === "active"}
+                gameStarted={
+                  Boolean(teamClock) && teamClock?.gameStatus !== "setup"
+                }
+                finished={teamFinished}
                 hasPending={teamSubmissions.some(
                   (submission) => submission.status === "pending"
                 )}
@@ -916,7 +1094,8 @@ const scoreWinner =
       )}
     
       {(currentView === "teamA" || currentView === "teamB") &&
-        (winner || allTeamsFinished) && (
+        entryScreen === "home" &&
+        teamResult?.over && (
           <div className="result-modal-overlay">
             <section
               className="result-modal"
@@ -931,20 +1110,20 @@ const scoreWinner =
               <p className="eyebrow">GIMCANA FOTOGRÀFICA</p>
 
               <h1 id="result-modal-title">
-                {!winner && !scoreWinner
+                {teamResult.draw
                   ? "Empat!"
-                  : (winner ?? scoreWinner)?.id ===
+                  : teamResult.winnerKey ===
                       (currentView === "teamA" ? "A" : "B")
                     ? "Heu guanyat!"
                     : "Partida finalitzada"}
               </h1>
 
               <p className="result-modal-message">
-                {winner
-                  ? `${winner.name} ha completat tota la seva llista i guanya la partida.`
-                  : scoreWinner
-                    ? `${scoreWinner.name} guanya amb ${scoreWinner.approvedCount} reptes aprovats.`
-                    : "Els dos equips heu acabat amb el mateix nombre de reptes aprovats."}
+                {teamResult.draw
+                  ? "Els dos equips heu acabat amb el mateix nombre de reptes aprovats."
+                  : teamResult.byCompletion
+                    ? `${teamResult.winnerName} ha completat tota la seva llista i guanya la partida.`
+                    : `${teamResult.winnerName} guanya amb ${teamResult.winnerApproved} reptes aprovats.`}
               </p>
 
               <div className="result-modal-actions">
@@ -979,9 +1158,9 @@ const scoreWinner =
             return (
               <SummaryScreen
                 team={team}
-                submissions={submissions}
-                teamWon={(winner ?? scoreWinner)?.id === teamId}
-                isDraw={!winner && !scoreWinner}
+                submissions={teamSubmissions}
+                teamWon={teamResult?.winnerKey === teamId}
+                isDraw={Boolean(teamResult?.draw)}
                 onBack={() => setCurrentView("home")}
               />
             );
@@ -1031,18 +1210,18 @@ const scoreWinner =
         </select>
       </section>
       <JudgeHeader
-        running={running}
-        gameStarted={gameStarted}
-        allTeamsFinished={allTeamsFinished}
+        running={judgeRunning}
+        gameStarted={judgeStarted}
+        allTeamsFinished={judgeFinished}
         onLogout={handleJudgeLogout}
       />
 
       <JudgeTeamGrid
-        teams={teams}
-        submissions={submissions}
-        running={running}
-        gameStarted={gameStarted}
-        getDisplayedSeconds={getDisplayedSeconds}
+        teams={judgeTeams}
+        pendingCounts={judgePendingCounts}
+        running={judgeRunning}
+        gameStarted={judgeStarted}
+        getDisplayedSeconds={(team) => team.seconds}
       />
 
       <ServerModerationSection
@@ -1062,11 +1241,11 @@ const scoreWinner =
         <div className="control-actions">
           <button
             className="primary-button"
-            onClick={running ? pauseGame : startGame}
-            disabled={allTeamsFinished}
+            onClick={handleJudgeStartPause}
+            disabled={!judgeServer || judgeFinished}
           >
-            {running ? <Pause size={17} /> : <Play size={17} />}
-            {running ? "Pausar" : gameStarted ? "Reanudar" : "Iniciar"}
+            {judgeRunning ? <Pause size={17} /> : <Play size={17} />}
+            {judgeRunning ? "Pausar" : judgeStarted ? "Reprendre" : "Iniciar"}
           </button>
           <button className="secondary-button" onClick={resetGame}>
             <RotateCcw size={16} />

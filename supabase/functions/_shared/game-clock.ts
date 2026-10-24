@@ -62,3 +62,69 @@ export function getTeamClock(
     remainingSeconds: remaining,
   };
 }
+
+type ResultTeam = {
+  key: string;
+  name: string;
+  approvedCount: number;
+  clock: { finished: boolean; finishReason: string | null };
+};
+
+// Resultat de la partida segons les regles del joc: el primer equip que
+// completa la llista guanya; si tots dos s'han quedat sense temps, guanya qui
+// té més reptes aprovats, i si empaten és empat.
+export function getGameResult(gameStatus: string, teams: ResultTeam[]) {
+  const over =
+    gameStatus === "finished" ||
+    (teams.length > 0 && teams.every((team) => team.clock.finished));
+
+  if (!over) {
+    return {
+      over: false,
+      draw: false,
+      byCompletion: false,
+      winnerKey: null,
+      winnerName: null,
+      winnerApproved: 0,
+    };
+  }
+
+  const completed = teams.find(
+    (team) => team.clock.finishReason === "completed",
+  );
+
+  if (completed) {
+    return {
+      over: true,
+      draw: false,
+      byCompletion: true,
+      winnerKey: completed.key,
+      winnerName: completed.name,
+      winnerApproved: completed.approvedCount,
+    };
+  }
+
+  const [first, second] = [...teams].sort(
+    (a, b) => b.approvedCount - a.approvedCount,
+  );
+
+  if (!first || (second && second.approvedCount === first.approvedCount)) {
+    return {
+      over: true,
+      draw: true,
+      byCompletion: false,
+      winnerKey: null,
+      winnerName: null,
+      winnerApproved: first?.approvedCount ?? 0,
+    };
+  }
+
+  return {
+    over: true,
+    draw: false,
+    byCompletion: false,
+    winnerKey: first.key,
+    winnerName: first.name,
+    winnerApproved: first.approvedCount,
+  };
+}

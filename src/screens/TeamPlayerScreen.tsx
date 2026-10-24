@@ -7,6 +7,7 @@ type TeamPlayerScreenProps = {
   timeText: string;
   running: boolean;
   gameStarted: boolean;
+  finished: boolean;
   hasPending: boolean;
   selectedChallengeId: string;
   onSelectChallenge: (value: string) => void;
@@ -19,6 +20,7 @@ export default function TeamPlayerScreen({
   timeText,
   running,
   gameStarted,
+  finished,
   hasPending,
   selectedChallengeId,
   onSelectChallenge,
@@ -42,7 +44,7 @@ export default function TeamPlayerScreen({
       <div className="timer">{timeText}</div>
 
       <p>
-        {team.finished
+        {finished
           ? "Partida finalitzada"
           : running
             ? "Partida en curs"
@@ -84,7 +86,7 @@ export default function TeamPlayerScreen({
           id={`challenge-${team.id}`}
           value={selectedChallengeId}
           onChange={(event) => onSelectChallenge(event.target.value)}
-          disabled={!running || team.finished || hasPending || allApproved}
+          disabled={!running || finished || hasPending || allApproved}
         >
           <option value="">Tria un repte</option>
 
@@ -110,7 +112,7 @@ export default function TeamPlayerScreen({
           capture="environment"
           disabled={
             !running ||
-            team.finished ||
+            finished ||
             hasPending ||
             !selectedChallengeId ||
             allApproved
@@ -126,7 +128,7 @@ export default function TeamPlayerScreen({
           }}
         />
 
-        {!running && !team.finished && (
+        {!running && !finished && (
           <p>Podràs enviar fotos quan el jutge iniciï la partida.</p>
         )}
       </div>

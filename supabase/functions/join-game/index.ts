@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
       .eq("game_code", gameCode)
       .maybeSingle();
 
-    if (gameError || !game || game.status === "finished") {
+    if (gameError || !game) {
       return respond({ error: "Codi, equip o PIN incorrecte." }, 401);
     }
 

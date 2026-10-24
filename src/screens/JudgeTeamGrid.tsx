@@ -1,10 +1,10 @@
 import { Camera, Check } from "lucide-react";
-import type { Team, Submission } from "../types";
+import type { Team } from "../types";
 import { formatTime } from "../utils";
 
 type JudgeTeamGridProps = {
   teams: Team[];
-  submissions: Submission[];
+  pendingCounts: Record<string, number>;
   running: boolean;
   gameStarted: boolean;
   getDisplayedSeconds: (team: Team) => number;
@@ -12,7 +12,7 @@ type JudgeTeamGridProps = {
 
 export default function JudgeTeamGrid({
   teams,
-  submissions,
+  pendingCounts,
   running,
   gameStarted,
   getDisplayedSeconds,
@@ -23,7 +23,10 @@ export default function JudgeTeamGrid({
         const approved = team.challenges.filter(
           (challenge) => challenge.approved
         ).length;
-        const progress = (approved / team.challenges.length) * 100;
+        const progress =
+          team.challenges.length > 0
+            ? (approved / team.challenges.length) * 100
+            : 0;
 
         return (
           <article className={`team-card team-${team.id}`} key={team.id}>
@@ -53,12 +56,7 @@ export default function JudgeTeamGrid({
               </span>
               <span>
                 <Camera size={15} />{" "}
-                {submissions.filter(
-                  (submission) =>
-                    submission.teamId === team.id &&
-                    submission.status === "pending"
-                ).length}{" "}
-                pendents de revisio
+                {pendingCounts[team.id] ?? 0} pendents de revisió
               </span>
             </div>
 

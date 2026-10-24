@@ -1,9 +1,18 @@
 import { Check } from "lucide-react";
-import type { Team, Submission } from "../types";
+import type { Team } from "../types";
+
+type TeamSubmission = {
+  id: string;
+  challengeId: string;
+  status: "pending" | "approved" | "rejected";
+  comment: string;
+  receivedAt: string;
+  photoUrl?: string;
+};
 
 type SummaryScreenProps = {
   team: Team;
-  submissions: Submission[];
+  submissions: TeamSubmission[];
   teamWon: boolean;
   isDraw: boolean;
   onBack: () => void;
@@ -16,9 +25,16 @@ export default function SummaryScreen({
   isDraw,
   onBack,
 }: SummaryScreenProps) {
-  const teamSubmissions = submissions
-    .filter((item) => item.teamId === team.id)
-    .sort((a, b) => a.receivedAt - b.receivedAt);
+  const teamSubmissions = [...submissions].sort((a, b) =>
+    a.receivedAt.localeCompare(b.receivedAt)
+  );
+
+  function challengeTitle(challengeId: string) {
+    return (
+      team.challenges.find((challenge) => String(challenge.id) === challengeId)
+        ?.title ?? ""
+    );
+  }
 
   const approvedChallenges = team.challenges.filter(
     (challenge) => challenge.approved
@@ -71,7 +87,7 @@ export default function SummaryScreen({
                 challenge.approved ? "completed" : ""
               }`}
             >
-              {challenge.approved ? <Check size={14} /> : challenge.id}
+              {challenge.approved ? <Check size={14} /> : "•"}
             </span>
 
             <span className={challenge.approved ? "done-text" : ""}>
@@ -89,13 +105,15 @@ export default function SummaryScreen({
         <div className="summary-photos">
           {teamSubmissions.map((submission) => (
             <article className="summary-photo" key={submission.id}>
-              <img
-                src={submission.photoUrl}
-                alt={`Foto del repte ${submission.title}`}
-              />
+              {submission.photoUrl && (
+                <img
+                  src={submission.photoUrl}
+                  alt={`Foto del repte ${challengeTitle(submission.challengeId)}`}
+                />
+              )}
 
               <div>
-                <strong>{submission.title}</strong>
+                <strong>{challengeTitle(submission.challengeId)}</strong>
                 <p>
                   {submission.status === "approved"
                     ? "✓ Aprovada"
