@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { Pause, Play, RotateCcw, ShieldCheck, Trophy } from "lucide-react";
+import {
+  BookOpen,
+  Pause,
+  Play,
+  RotateCcw,
+  ShieldCheck,
+  Trophy,
+} from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import type { Challenge, Team, ServerSubmission } from "./types";
@@ -13,12 +20,13 @@ import CreateGameSection from "./screens/CreateGameSection";
 import JudgeHeader from "./screens/JudgeHeader";
 import JudgeTeamGrid from "./screens/JudgeTeamGrid";
 import ServerModerationSection from "./screens/ServerModerationSection";
+import ChallengeLibraryScreen from "./screens/ChallengeLibraryScreen";
 
 
 export default function App() {
   
   const [currentView, setCurrentView] = useState<
-   "home" | "judge" | "teamA" | "teamB" | "summaryA" | "summaryB"
+   "home" | "judge" | "library" | "teamA" | "teamB" | "summaryA" | "summaryB"
   >("home");
 
   const [entryScreen, setEntryScreen] = useState<
@@ -824,8 +832,27 @@ export default function App() {
         />
       )}
 
+    {currentView === "library" && session && (
+      <ChallengeLibraryScreen onBack={() => setCurrentView("judge")} />
+    )}
+
     {currentView === "judge" && session && (
       <>
+      <section className="team-card" style={{ marginBottom: 24, padding: 24 }}>
+        <p className="eyebrow">BIBLIOTECA</p>
+        <h2>Reptes de la biblioteca</h2>
+        <p className="muted">
+          Crea, edita i esborra els reptes que després triaràs per a cada partida.
+        </p>
+        <button
+          className="primary-button"
+          onClick={() => setCurrentView("library")}
+        >
+          <BookOpen size={17} />
+          Obrir la biblioteca
+        </button>
+      </section>
+
       <CreateGameSection
         gameName={gameName}
         onGameNameChange={setGameName}
