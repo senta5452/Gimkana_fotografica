@@ -21,7 +21,7 @@ export default function HomeScreen({
         <button className="home-option" onClick={onJudge}>
           <span className="home-option-icon">⚖️</span>
           <span className="home-option-text">
-            <strong>Jutge</strong>
+            <strong>Monitor</strong>
             <small>Controla la partida i valida les fotografies.</small>
           </span>
           <span className="home-arrow">→</span>

@@ -25,8 +25,8 @@ export default function JudgeLoginScreen({
       style={{ maxWidth: 440, margin: "32px auto", padding: 24 }}
     >
       <p className="eyebrow">ACCÉS RESTRINGIT</p>
-      <h1>Inici de sessió del jutge</h1>
-      <p className="muted">Entra amb el compte de jutge de Supabase.</p>
+      <h1>Inici de sessió del monitor</h1>
+      <p className="muted">Entra amb el teu compte de monitor.</p>
 
       {authLoading ? (
         <p>Comprovant la sessió...</p>

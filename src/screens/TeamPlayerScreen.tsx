@@ -50,7 +50,7 @@ export default function TeamPlayerScreen({
             ? "Partida en curs"
             : gameStarted
               ? "Partida en pausa"
-              : "Esperant que el jutge iniciï la partida"}
+              : "Esperant que el monitor iniciï la partida"}
       </p>
 
       <h2>Els teus reptes</h2>
@@ -129,7 +129,7 @@ export default function TeamPlayerScreen({
         />
 
         {!running && !finished && (
-          <p>Podràs enviar fotos quan el jutge iniciï la partida.</p>
+          <p>Podràs enviar fotos quan el monitor iniciï la partida.</p>
         )}
       </div>
 

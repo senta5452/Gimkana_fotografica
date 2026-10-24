@@ -485,7 +485,7 @@ export default function App() {
         setSession(data.session);
       }
     } catch {
-      setLoginError("No s'ha pogut connectar amb Supabase.");
+      setLoginError("No s'ha pogut connectar amb el servidor.");
     } finally {
       setLoginBusy(false);
     }
@@ -601,7 +601,7 @@ export default function App() {
 
     async function handleCreateGame() {
     if (!session?.access_token) {
-      setGameError("Has d'iniciar sessió com a jutge.");
+      setGameError("Has d'iniciar sessió com a monitor.");
       return;
     }
 
@@ -835,7 +835,7 @@ export default function App() {
         createdGame={createdGame}
       />
             <section className="team-card" style={{ marginBottom: 24, padding: 24 }}>
-        <p className="eyebrow">PARTIDA ACTIVA</p>
+        <p className="eyebrow">PARTIDA</p>
 
         <label htmlFor="judge-game">Partida que supervises</label>
         <select
@@ -880,7 +880,7 @@ export default function App() {
           <ShieldCheck size={21} />
           <div>
             <strong>Control de partida</strong>
-            <span>Obtindras 3 minuts per cada fotografia correcte.</span>
+            <span>Cada fotografia aprovada suma 3 minuts a l'equip.</span>
           </div>
         </div>
 

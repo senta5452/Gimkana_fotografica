@@ -17,7 +17,9 @@ Estic desenvolupant una aplicació web anomenada **Gimcana Fotogràfica**. Soc p
 - No demanis contrasenyes, tokens ni claus secretes.
 - Quan hagis de crear una Edge Function nova, segueix el mateix patró de les que ja funcionen (vegeu secció 5).
 
-**Punt exacte per reprendre:** Fase 5, pas 8 (secció 9): passar tots els textos de la interfície a català. Els passos 1-7 de la Fase 5 estan fets i confirmats. Git està endreçat i els commits es pugen a GitHub quan el canvi està provat. Els passos 1-5 i 7 de la Fase 5 estan fets i confirmats. Última actualització del document: 24/10/2026.
+**Punt exacte per reprendre:** la Fase 5 està acabada i confirmada. Cal triar la fase següent: Fase 2 (biblioteca de reptes) o Fase 7 (publicar i provar amb dispositius reals). Git està endreçat i els commits es pugen a GitHub quan el canvi està provat.
+
+**Terminologia:** a la interfície, el rol de "jutge" es diu **monitor** (decisió del 24/10/2026). Tots els textos visibles del frontend diuen "monitor". Al codi (noms de funcions `judge-*`, components `Judge*`, comentaris) i en aquest document es continua dient "jutge". Última actualització del document: 24/10/2026.
 
 **Entorn de treball:** treballo al xat de VS Code (Claude Code), que té accés a tot el repositori. L'assistent llegeix ell mateix els fitxers del projecte (`src/App.tsx`, `supabase/functions/...`); no cal que enganxi fragments de codi. Les normes de treball continuen valent igual (un pas petit, esperar la meva confirmació, no demanar-me claus). Si l'assistent ha de modificar fitxers, m'explica abans què canviarà i en quins fitxers, i després de cada canvi em diu exactament què he de provar. Les publicacions de les Edge Functions les faig jo amb `npx.cmd supabase functions deploy <nom>`.
 
@@ -334,7 +336,8 @@ Sense extreure (continuen dins d'`App.tsx`): la barra de control (Iniciar/Pausar
 - Els enllaços de les fotos caduquen als 60 minuts; com que les consultes són cada 5 s, es renoven sols mentre la pantalla és oberta.
 - L'aprovació del jutge té un petit retard (arrencada en fred de les funcions).
 - Fotos òrfenes al bucket de proves antigues (de files de `submissions` esborrades a mà): `judge-reset-game` les esborra en reiniciar cada partida. La consulta SQL de la secció 11 no esborra fitxers.
-- Textos barrejats en castellà i català (p. ex. "Panel de control del monitor", "por foto" a `JudgeHeader`, "Obtindras 3 minuts per cada fotografia correcte" sense accent); la interfície ha de ser en català (pas 8).
+- Les Edge Functions del jutge (`create-game`, `judge-list-submissions`, `judge-reset-game`, `judge-set-game-state`, `review-submission`) encara tenen els missatges d'error "Cal iniciar sessió com a jutge." i "Sessió de jutge no vàlida." (haurien de dir "monitor"). Només es veuen a la consola o si la sessió caduca enmig d'una revisió. Canviar-los quan s'hagi de tornar a publicar alguna d'aquestes funcions per un altre motiu.
+- A la capçalera del monitor hi ha "SJD com a mapa de joc." (es manté expressament).
 - El document de requisits preveu accés del jutge amb codi d'administrador; l'app fa servir correu i contrasenya (Supabase Auth). Decidit mantenir correu i contrasenya.
 - **Git (endreçat el 24/10/2026):** hi ha un `.gitignore` i Git ja no segueix `node_modules`, `dist`, `supabase/.temp`, `.env.local` ni `*.tsbuildinfo` (els fitxers continuen a l'ordinador). S'han esborrat els fitxers antics `src/App.js`, `src/main.js`, `src/App.backup.txt` i `error.txt` (recuperables des del primer commit). Els commits nous encara NO s'han pujat a GitHub. El primer commit, que ja és a GitHub, conté aquests fitxers a l'historial; `.env.local` només té la URL i la clau publishable (pública per disseny), no cap clau secreta. Pendent: comprovar si el repositori de GitHub és públic o privat.
 
@@ -360,7 +363,7 @@ Fet: enviaments a `submissions`, llista i revisió del jutge, aprovació de rept
 ### Fase 4 — Emmagatzematge permanent de fotografies: FET
 Bucket privat, pujada per Edge Function i enllaços temporals. Pendent de decidir: compressió abans de pujar, límit de mida i tipus de fitxer al bucket (vegeu 4.11).
 
-### Fase 5 — Temporitzador i estat de la partida compartits (EN CURS: passos 1-7 fets; queda el 8)
+### Fase 5 — Temporitzador i estat de la partida compartits: FETA (tots els passos confirmats)
 
 Disseny acordat:
 - Un sol rellotge per partida al servidor. Temps transcorregut = `elapsed_seconds` + (ara − `clock_started_at`, només si l'estat és `active`).
@@ -379,7 +382,7 @@ Passos:
 5. FET i confirmat: frontend de l'equip i del jutge (temps, estat, final, botons, modal de resultat i resum) a partir del servidor (4.16, 4.17). Commit `8188f8f`.
 6. FET i confirmat: retirat el temporitzador local i tot l'estat local de partida (secció 6).
 7. FET i confirmat: reinici al servidor amb `judge-reset-game` i el botó Reiniciar (`handleJudgeReset`, amb confirmació). Decisió presa: els enviaments antics i les seves fotos s'esborren (no s'arxiven).
-8. **PENDENT (següent pas):** textos, passar tota la interfície a català.
+8. FET i confirmat: textos de la interfície en català i "jutge" canviat per "monitor" a tots els textos visibles del frontend (vegeu Terminologia, secció 1). Moderació del monitor: "MODERACIÓ · Fotos dels equips".
 
 ### Fase 6 — Temps real
 Realtime no està configurat; es fa servir consulta cada 5 s (equip i jutge). Els tokens dels equips són personalitzats, no JWT de Supabase Auth: no s'ha de donar per fet que poden subscriure's directament; cal dissenyar l'accés de manera segura (o mantenir la consulta periòdica).
@@ -395,7 +398,7 @@ Provar jutge i dos equips amb dispositius diferents de debò (ara ja és possibl
 
 Estàs al xat de VS Code amb accés al repositori: llegeix tu mateix `src/App.tsx` i la resta de fitxers abans de proposar canvis.
 
-**Següent pas:** Fase 5, pas 8: passar tots els textos de la interfície a català (revisar totes les pantalles de `src/screens/` i `App.tsx`). Després, triar entre la Fase 2 (biblioteca de reptes, perquè les partides noves tinguin reptes) i la Fase 7 (publicar i provar amb dispositius reals).
+**Següent pas:** la Fase 5 està acabada. Triar entre la Fase 2 (biblioteca de reptes, perquè les partides noves tinguin reptes) i la Fase 7 (publicar i provar amb dispositius reals).
 
 ---
 

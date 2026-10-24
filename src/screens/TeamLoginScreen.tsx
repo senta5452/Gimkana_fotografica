@@ -29,7 +29,7 @@ export default function TeamLoginScreen({
       <h1>Entrar com a Equip {teamLabel}</h1>
 
       <p className="muted">
-        Introdueix el codi de partida i el PIN que t'ha donat el jutge.
+        Introdueix el codi de partida i el PIN que t'ha donat el monitor.
       </p>
 
       <form onSubmit={onSubmit}>

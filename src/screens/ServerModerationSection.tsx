@@ -50,8 +50,8 @@ export default function ServerModerationSection({
     <section className="submissions-section">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">SERVIDOR</p>
-          <h2>Fotos del servidor</h2>
+          <p className="eyebrow">MODERACIÓ</p>
+          <h2>Fotos dels equips</h2>
         </div>
         <span className="count-badge">{pendingCount}</span>
       </div>
@@ -63,7 +63,7 @@ export default function ServerModerationSection({
           <div className="empty-icon">
             <Camera size={25} />
           </div>
-          <strong>Encara no hi ha enviaments al servidor</strong>
+          <strong>Encara no hi ha cap foto enviada</strong>
           <p>Quan un equip enviï una foto, apareixerà aquí.</p>
         </div>
       ) : (

@@ -21,8 +21,8 @@ export default function JudgeHeader({
             <Flag size={24} />
           </div>
           <div>
-            <h1>GIMKANA FOTOGRÀFICA</h1>
-            <p>Panel de control del monitor</p>
+            <h1>GIMCANA FOTOGRÀFICA</h1>
+            <p>Panell de control del monitor</p>
           </div>
         </div>
         <div className={`status-pill ${running ? "live" : ""}`}>
@@ -51,7 +51,7 @@ export default function JudgeHeader({
         </div>
         <div className="rule-chip">
           <Clock3 size={16} />
-          20 min inicials · +3 min por foto
+          20 min inicials · +3 min per foto aprovada
         </div>
       </section>
     </>
