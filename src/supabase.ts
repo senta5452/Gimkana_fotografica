@@ -7,4 +7,8 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Falta la configuració de Supabase al fitxer .env.local')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+// La sessió del monitor es guarda a sessionStorage: cada pestanya té la
+// seva i una pestanya nova torna a demanar el correu i la contrasenya.
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { storage: window.sessionStorage },
+})

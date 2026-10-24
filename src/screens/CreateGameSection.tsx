@@ -25,6 +25,7 @@ type CreateGameSectionProps = {
     defaultBonusMinutes: number
   ) => void;
   onOpenLibrary: () => void;
+  onOpenGame: (gameId: string) => void;
   creating: boolean;
   error: string;
   createdGame: CreatedGame | null;
@@ -35,6 +36,7 @@ export default function CreateGameSection({
   onGameNameChange,
   onCreateGame,
   onOpenLibrary,
+  onOpenGame,
   creating,
   error,
   createdGame,
@@ -281,6 +283,12 @@ export default function CreateGameSection({
             Guarda aquests PIN: es mostren ara perquè els puguis compartir
             amb els equips.
           </p>
+          <button
+            className="primary-button"
+            onClick={() => onOpenGame(createdGame.gameId)}
+          >
+            Obrir aquesta partida
+          </button>
         </div>
       )}
     </section>

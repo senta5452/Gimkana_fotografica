@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   BookOpen,
+  LogOut,
   Pause,
   Play,
   RotateCcw,
@@ -21,12 +22,23 @@ import JudgeHeader from "./screens/JudgeHeader";
 import JudgeTeamGrid from "./screens/JudgeTeamGrid";
 import ServerModerationSection from "./screens/ServerModerationSection";
 import ChallengeLibraryScreen from "./screens/ChallengeLibraryScreen";
+import GameListSection from "./screens/GameListSection";
+import TeamNameScreen from "./screens/TeamNameScreen";
 
+
+const MONITOR_VIEW_KEY = "monitorView";
 
 export default function App() {
   
   const [currentView, setCurrentView] = useState<
-   "home" | "judge" | "library" | "teamA" | "teamB" | "summaryA" | "summaryB"
+    | "home"
+    | "judge"
+    | "judgeGame"
+    | "library"
+    | "teamA"
+    | "teamB"
+    | "summaryA"
+    | "summaryB"
   >("home");
 
   const [entryScreen, setEntryScreen] = useState<
@@ -86,6 +98,12 @@ export default function App() {
     name: string;
     challenges: Challenge[];
   } | null>(null);
+
+  // Pas "Com es diu el vostre equip?" després d'entrar (només en setup).
+  const [teamNameStep, setTeamNameStep] = useState(false);
+  const [teamNameInput, setTeamNameInput] = useState("");
+  const [teamNameError, setTeamNameError] = useState("");
+  const [teamNameBusy, setTeamNameBusy] = useState(false);
 
   // Missatge de l'últim enviament de foto de l'equip.
   const [teamUploadStatus, setTeamUploadStatus] = useState<{
@@ -154,22 +172,23 @@ export default function App() {
       );
 
       setJudgeGames(games);
-      setSelectedGameId((current) => {
-        if (
-          createdGame &&
-          games.some((game) => game.id === createdGame.gameId)
-        ) {
-          return createdGame.gameId;
-        }
-
-        if (games.some((game) => game.id === current)) return current;
-
-        return games[0]?.id ?? "";
-      });
     }
 
-    loadJudgeGames();
-  }, [session?.user.id, createdGame]);
+    // Es torna a carregar en tornar a l'inici del monitor (estats al dia) i
+    // en obrir una partida (per tenir-ne el nom i el codi).
+    if (currentView === "judge" || currentView === "judgeGame") {
+      loadJudgeGames();
+    }
+  }, [session?.user.id, createdGame, currentView]);
+
+  const selectedGame = judgeGames.find((game) => game.id === selectedGameId);
+
+  function openJudgeGame(gameId: string) {
+    setJudgeServer(null);
+    setServerSubmissions([]);
+    setSelectedGameId(gameId);
+    setCurrentView("judgeGame");
+  }
 
       async function loadServerSubmissions() {
     if (!selectedGameId) {
@@ -211,7 +230,7 @@ export default function App() {
 
   // Mentre el jutge és al panell, tornem a demanar les fotos cada 5 s.
   useEffect(() => {
-    if (currentView !== "judge" || !session || !selectedGameId) return;
+    if (currentView !== "judgeGame" || !session || !selectedGameId) return;
 
     const interval = window.setInterval(loadServerSubmissions, 5000);
 
@@ -220,7 +239,7 @@ export default function App() {
 
   // Compte enrere local del panell del jutge entre les consultes de 5 s.
   useEffect(() => {
-    if (currentView !== "judge" || judgeServer?.status !== "active") return;
+    if (currentView !== "judgeGame" || judgeServer?.status !== "active") return;
 
     const interval = window.setInterval(() => setJudgeNow(Date.now()), 1000);
 
@@ -496,6 +515,27 @@ export default function App() {
 
       setSession(data.session);
       setAuthLoading(false);
+
+      // Si hi ha sessió és que s'ha recarregat aquesta pestanya: tornem a
+      // la pantalla del monitor on érem.
+      if (data.session) {
+        try {
+          const saved = JSON.parse(
+            sessionStorage.getItem(MONITOR_VIEW_KEY) ?? "{}"
+          ) as { view?: string; gameId?: string };
+
+          if (saved.view === "judgeGame" && saved.gameId) {
+            setSelectedGameId(saved.gameId);
+            setCurrentView("judgeGame");
+          } else if (saved.view === "library") {
+            setCurrentView("library");
+          } else {
+            setCurrentView("judge");
+          }
+        } catch {
+          setCurrentView("judge");
+        }
+      }
     });
 
     const {
@@ -507,6 +547,36 @@ export default function App() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Recordem a quina pantalla del monitor som, per si es recarrega la pestanya.
+  useEffect(() => {
+    if (
+      currentView === "judge" ||
+      currentView === "judgeGame" ||
+      currentView === "library"
+    ) {
+      sessionStorage.setItem(
+        MONITOR_VIEW_KEY,
+        JSON.stringify({ view: currentView, gameId: selectedGameId })
+      );
+    }
+  }, [currentView, selectedGameId]);
+
+  // Tanca la sessió del monitor només en aquesta pestanya.
+  async function signOutMonitor() {
+    sessionStorage.removeItem(MONITOR_VIEW_KEY);
+
+    if (!session) return;
+
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+
+    if (error) {
+      console.error("signOut:", error);
+    }
+
+    setSession(null);
+    setLoginPassword("");
+  }
 
     async function handleJudgeLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -535,16 +605,9 @@ export default function App() {
   }
 
     async function handleJudgeLogout() {
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        setLoginError("No s'ha pogut tancar la sessió.");
-        return;
-      }
-
-      setSession(null);
+      await signOutMonitor();
       setCurrentView("home");
-      setLoginPassword("");
+      setEntryScreen("home");
     }
 
         async function handleTeamLogin(
@@ -627,11 +690,17 @@ export default function App() {
         );
 
         setTeamUploadStatus(null);
+        const currentName = gameData.team?.name ?? `Equip ${team}`;
         setTeamData({
           key: team,
-          name: gameData.team?.name ?? `Equip ${team}`,
+          name: currentName,
           challenges: loadedChallenges,
         });
+
+        // Abans que comenci la partida, l'equip pot triar el seu nom.
+        setTeamNameInput(currentName);
+        setTeamNameError("");
+        setTeamNameStep(gameData.game.status === "setup");
 
         setEntryScreen("home");
         setCurrentView(team === "A" ? "teamA" : "teamB");
@@ -643,6 +712,50 @@ export default function App() {
       } finally {
         setTeamLoginBusy(false);
       }
+    }
+
+    async function handleTeamNameSubmit(
+      event: React.FormEvent<HTMLFormElement>
+    ) {
+      event.preventDefault();
+
+      const name = teamNameInput.trim().replace(/\s+/g, " ");
+      const token = sessionStorage.getItem("teamToken");
+
+      if (!name || !token) return;
+
+      // Si no ha canviat, no cal desar res.
+      if (name === teamData?.name) {
+        setTeamNameStep(false);
+        return;
+      }
+
+      setTeamNameBusy(true);
+      setTeamNameError("");
+
+      const { error } = await supabase.functions.invoke("set-team-name", {
+        body: { token, name },
+      });
+
+      setTeamNameBusy(false);
+
+      if (error) {
+        let message = "No s'ha pogut desar el nom de l'equip.";
+
+        if (error.context instanceof Response) {
+          try {
+            message = (await error.context.json()).error ?? message;
+          } catch {
+            // La resposta no és JSON: mantenim el missatge genèric.
+          }
+        }
+
+        setTeamNameError(message);
+        return;
+      }
+
+      setTeamData((current) => (current ? { ...current, name } : current));
+      setTeamNameStep(false);
     }
 
     async function handleCreateGame(
@@ -731,7 +844,9 @@ export default function App() {
         <nav className="view-navigation">
           <button
             className="secondary-button"
-            onClick={() => {
+            onClick={async () => {
+              // Sortir del monitor tanca la sessió (com passa amb els equips).
+              await signOutMonitor();
               setCurrentView("home");
               setEntryScreen("home");
               setLoginError("");
@@ -759,6 +874,20 @@ export default function App() {
         )}
       
       {(currentView === "teamA" || currentView === "teamB") &&
+        entryScreen === "home" &&
+        teamNameStep && (
+          <TeamNameScreen
+            teamLabel={currentView === "teamA" ? "A" : "B"}
+            name={teamNameInput}
+            onNameChange={setTeamNameInput}
+            error={teamNameError}
+            busy={teamNameBusy}
+            onSubmit={handleTeamNameSubmit}
+          />
+        )}
+
+      {(currentView === "teamA" || currentView === "teamB") &&
+        !teamNameStep &&
         !(
           (currentView === "teamA" && entryScreen === "team-a-login") ||
           (currentView === "teamB" && entryScreen === "team-b-login")
@@ -903,6 +1032,32 @@ export default function App() {
     {currentView === "judge" && session && (
       <>
       <section className="team-card" style={{ marginBottom: 24, padding: 24 }}>
+        <p className="eyebrow">GIMCANA FOTOGRÀFICA</p>
+        <h1>Inici del monitor</h1>
+        <p className="muted">
+          Tria una partida per supervisar-la, crea'n una de nova o gestiona la
+          biblioteca de reptes.
+        </p>
+        <button className="secondary-button" onClick={handleJudgeLogout}>
+          <LogOut size={16} />
+          Tancar sessió
+        </button>
+      </section>
+
+      <GameListSection games={judgeGames} onOpenGame={openJudgeGame} />
+
+      <CreateGameSection
+        gameName={gameName}
+        onGameNameChange={setGameName}
+        onCreateGame={handleCreateGame}
+        onOpenLibrary={() => setCurrentView("library")}
+        onOpenGame={openJudgeGame}
+        creating={creatingGame}
+        error={gameError}
+        createdGame={createdGame}
+      />
+
+      <section className="team-card" style={{ marginBottom: 24, padding: 24 }}>
         <p className="eyebrow">BIBLIOTECA</p>
         <h2>Reptes de la biblioteca</h2>
         <p className="muted">
@@ -916,36 +1071,23 @@ export default function App() {
           Obrir la biblioteca
         </button>
       </section>
+      </>
+    )}
 
-      <CreateGameSection
-        gameName={gameName}
-        onGameNameChange={setGameName}
-        onCreateGame={handleCreateGame}
-        onOpenLibrary={() => setCurrentView("library")}
-        creating={creatingGame}
-        error={gameError}
-        createdGame={createdGame}
-      />
-            <section className="team-card" style={{ marginBottom: 24, padding: 24 }}>
-        <p className="eyebrow">PARTIDA</p>
-
-        <label htmlFor="judge-game">Partida que supervises</label>
-        <select
-          id="judge-game"
-          value={selectedGameId}
-          onChange={(event) => setSelectedGameId(event.target.value)}
-          style={{ display: "block", width: "100%" }}
+    {currentView === "judgeGame" && session && (
+      <>
+      <section className="team-card" style={{ marginBottom: 24, padding: 24 }}>
+        <button
+          className="secondary-button"
+          onClick={() => setCurrentView("judge")}
         >
-          {judgeGames.length === 0 && (
-            <option value="">No tens cap partida</option>
-          )}
-
-          {judgeGames.map((game) => (
-            <option key={game.id} value={game.id}>
-              {game.name} · {game.game_code}
-            </option>
-          ))}
-        </select>
+          ← Les meves partides
+        </button>
+        <p className="eyebrow" style={{ marginTop: 20 }}>PARTIDA</p>
+        <h2>{selectedGame?.name ?? "Partida"}</h2>
+        {selectedGame && (
+          <p className="muted">Codi de partida: {selectedGame.game_code}</p>
+        )}
       </section>
       <JudgeHeader
         durationSeconds={judgeServer?.durationSeconds ?? null}
