@@ -1041,3 +1041,31 @@ button:disabled {
   width: 100%;
   margin-top: 0;
 }
+/* Avisos a la pantalla de l'equip */
+.rejection-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #fca5a5;
+}
+
+.upload-status {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.upload-status-sending {
+  color: var(--muted);
+}
+
+.upload-status-ok {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.upload-status-error {
+  border-color: #f87171;
+  color: #fca5a5;
+}

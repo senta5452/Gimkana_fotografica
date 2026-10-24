@@ -87,6 +87,12 @@ export default function App() {
     challenges: Challenge[];
   } | null>(null);
 
+  // Missatge de l'últim enviament de foto de l'equip.
+  const [teamUploadStatus, setTeamUploadStatus] = useState<{
+    kind: "sending" | "ok" | "error";
+    text: string;
+  } | null>(null);
+
   // Resultat de la partida calculat pel servidor (get-team-game).
   const [teamResult, setTeamResult] = useState<{
     over: boolean;
@@ -430,16 +436,21 @@ export default function App() {
     const token = sessionStorage.getItem("teamToken");
 
     if (!token) {
-      console.error("submit-photo: no hi ha token d'equip.");
+      setTeamUploadStatus({
+        kind: "error",
+        text: "La sessió de l'equip ha caducat. Torna a entrar.",
+      });
       return;
     }
+
+    setTeamUploadStatus({ kind: "sending", text: "Enviant la fotografia..." });
 
     const formData = new FormData();
     formData.append("token", token);
     formData.append("challengeId", challengeId);
     formData.append("photo", file);
 
-    const { data, error } = await supabase.functions.invoke("submit-photo", {
+    const { error } = await supabase.functions.invoke("submit-photo", {
       body: formData,
     });
 
@@ -447,10 +458,26 @@ export default function App() {
       const detail =
         error.context instanceof Response ? await error.context.text() : "";
       console.error("submit-photo:", error.message, detail);
+
+      let text = "No s'ha pogut enviar la fotografia. Torna-ho a provar.";
+
+      try {
+        text = JSON.parse(detail).error ?? text;
+      } catch {
+        // La resposta no és JSON: mantenim el missatge genèric.
+      }
+
+      setTeamUploadStatus({ kind: "error", text });
       return;
     }
 
-    console.log("Enviament desat a Supabase:", data);
+    setTeamUploadStatus({
+      kind: "ok",
+      text: "Fotografia enviada! Espera que el monitor la revisi.",
+    });
+
+    // Així la foto pendent es veu de seguida, sense esperar 5 s.
+    await refreshTeamFromServer();
   }
 
     useEffect(() => {
@@ -589,6 +616,7 @@ export default function App() {
           })
         );
 
+        setTeamUploadStatus(null);
         setTeamData({
           key: team,
           name: gameData.team?.name ?? `Equip ${team}`,
@@ -736,6 +764,8 @@ export default function App() {
                 hasPending={teamSubmissions.some(
                   (submission) => submission.status === "pending"
                 )}
+                submissions={teamSubmissions}
+                uploadStatus={teamUploadStatus}
                 selectedChallengeId={selectedChallengeIds[team.id] || ""}
                 onSelectChallenge={(value) =>
                   setSelectedChallengeIds((previous) => ({
