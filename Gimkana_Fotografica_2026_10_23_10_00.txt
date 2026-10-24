@@ -17,7 +17,7 @@ Estic desenvolupant una aplicació web anomenada **Gimcana Fotogràfica**. Soc p
 - No demanis contrasenyes, tokens ni claus secretes.
 - Quan hagis de crear una Edge Function nova, segueix el mateix patró de les que ja funcionen (vegeu secció 5).
 
-**Punt exacte per reprendre:** Fase 5, pas 6 (secció 9): retirar el codi local antic. Git ja està endreçat (secció 8). Els passos 1-5 i 7 de la Fase 5 estan fets i confirmats. Última actualització del document: 24/10/2026.
+**Punt exacte per reprendre:** Fase 5, pas 8 (secció 9): passar tots els textos de la interfície a català. Els passos 1-7 de la Fase 5 estan fets i confirmats. Git està endreçat i els commits es pugen a GitHub quan el canvi està provat. Els passos 1-5 i 7 de la Fase 5 estan fets i confirmats. Última actualització del document: 24/10/2026.
 
 **Entorn de treball:** treballo al xat de VS Code (Claude Code), que té accés a tot el repositori. L'assistent llegeix ell mateix els fitxers del projecte (`src/App.tsx`, `supabase/functions/...`); no cal que enganxi fragments de codi. Les normes de treball continuen valent igual (un pas petit, esperar la meva confirmació, no demanar-me claus). Si l'assistent ha de modificar fitxers, m'explica abans què canviarà i en quins fitxers, i després de cada canvi em diu exactament què he de provar. Les publicacions de les Edge Functions les faig jo amb `npx.cmd supabase functions deploy <nom>`.
 
@@ -85,7 +85,7 @@ Funcionalitats desitjades:
 - Fotografies guardades permanentment.
 - Publicació final amb una URL pública.
 
-**Important:** el rellotge, l'estat, el final i el resultat de la partida ja surten del servidor (Fase 5, pas 5), però l'aplicació encara no està publicada ni s'ha provat amb dispositius diferents de debò. Encara queda codi local antic (pas 6) i les partides noves no tenen reptes (Fase 2). No afirmar que està acabada ni publicada.
+**Important:** tot l'estat de la partida (rellotge, estat, final, resultat, enviaments i reinici) ja surt del servidor i el codi local antic s'ha retirat (Fase 5, passos 5-7), però l'aplicació encara no està publicada ni s'ha provat amb dispositius diferents de debò, i les partides noves no tenen reptes (Fase 2). No afirmar que està acabada ni publicada.
 
 ---
 
@@ -202,7 +202,7 @@ No s'han de concedir permisos amplis al client per resoldre errors de manera rà
 
 ### 4.10. Reptes reals a la pantalla dels equips (confirmat)
 
-- `handleTeamLogin` i `refreshTeamFromServer` assignen a l'equip corresponent (A o B) els reptes i el nom retornats per `get-team-game`, mitjançant `setTeams`.
+- `handleTeamLogin` i `refreshTeamFromServer` desen l'equip que ha entrat (clau A o B, nom i reptes retornats per `get-team-game`) a l'estat `teamData`. A partir d'aquí es construeix `currentTeam`, que reben `TeamPlayerScreen` i `SummaryScreen`.
 - Es poden triar reptes al desplegable i pujar fotografies.
 - S'han inserit 5 reptes de prova a `challenges` per als equips antics que no en tenien: "Una bicicleta vermella", "Una estàtua", "Un pas de zebra", "Un gos amb el seu amo", "Una font".
 - Decisió de disseny: els reptes es mostren amb un punt (•) davant, no amb números ni amb l'id (també al resum).
@@ -221,19 +221,18 @@ No s'han de concedir permisos amplis al client per resoldre errors de manera rà
 - `loadServerSubmissions` a `App.tsx` la crida quan canvia la partida seleccionada i, des del 24/10/2026, **cada 5 s** mentre la vista és la del jutge (confirmat: les fotos noves apareixen soles). Desa els enviaments a `serverSubmissions` i l'estat i els rellotges a `judgeServer`.
 - Component `src/screens/ServerModerationSection.tsx` ("Fotos del servidor"): mostra les fotos (amb equip, repte, data, estat i motiu del rebuig) i els botons Aprovar i Rebutjar (el rebuig demana un motiu obligatori de fins a 500 caràcters). El text del motiu no s'esborra quan arriba una actualització.
 - Edge Function `review-submission` (JWT del jutge): vegeu secció 5. `handleServerReview` a `App.tsx` la crida i recarrega la llista.
-- La moderació antiga (local) i l'historial local continuen a la pantalla, però ja no reben res (es retiraran al pas 6).
+- La moderació antiga ("Fotos pendients") i l'"Historial de revisions" locals s'han retirat (pas 6). "Fotos del servidor" mostra totes les fotos, també les revisades amb el seu estat i motiu, i fa d'historial.
 
 ### 4.13. Pantalla de l'equip amb dades del servidor (confirmat)
 
-- `refreshTeamFromServer` a `App.tsx` crida `get-team-game` cada 5 segons mentre la vista és `teamA` o `teamB`: actualitza el nom i els reptes de l'equip, i desa `teamSubmissions`, `teamClock` i `teamResult`.
+- `refreshTeamFromServer` a `App.tsx` crida `get-team-game` cada 5 segons mentre la vista és `teamA` o `teamB`: desa `teamData`, `teamSubmissions`, `teamClock` i `teamResult`.
 - `hasPending` de `TeamPlayerScreen` surt dels enviaments del servidor (`teamSubmissions`).
-- La línia `simulateSubmission(team.id, challengeId, file);` a `onPhotoSelected` està comentada.
 - Confirmat amb dos navegadors: les aprovacions del jutge arriben a l'equip en uns 5 segons.
 
 ### 4.14. Estat de la partida al servidor: iniciar, pausar i reiniciar
 
 - Edge Function `judge-set-game-state` (JWT del jutge): rep `gameId` i `action` (`start` o `pause`). Comprova que la partida és del jutge. `start` serveix per iniciar i reprendre (de `setup` o `paused` a `active`; desa `clock_started_at` i, la primera vegada, `started_at`); `pause` suma el temps transcorregut a `elapsed_seconds`, buida `clock_started_at` i passa a `paused`. Les actualitzacions són protegides contra canvis simultanis (409 si l'estat ha canviat).
-- Frontend (confirmat): el botó Iniciar/Pausar/Reprendre crida `handleJudgeStartPause`, que fa `syncGameState(action)` i recarrega el panell de seguida. El text del botó i el bloqueig (desactivat si la partida és `finished`) surten de l'estat del servidor. `startGame` i `pauseGame` (locals) encara es criden, però ja no criden el servidor.
+- Frontend (confirmat): el botó Iniciar/Pausar/Reprendre crida `handleJudgeStartPause`, que fa `syncGameState(action)` i recarrega el panell de seguida. El text del botó i el bloqueig (desactivat si la partida és `finished`) surten de l'estat del servidor.
 - Reinici (confirmat): Edge Function `judge-reset-game` i `handleJudgeReset` al botó Reiniciar (amb confirmació). Provat: la partida torna a l'estat inicial al jutge i a l'equip, i les fotos de la partida s'esborren del bucket.
 - Els `console.log` temporals (`Estat de la partida al servidor:` i `Rellotge de l'equip:`) ja s'han tret.
 
@@ -295,8 +294,9 @@ No s'ha afegit cap entrada a `config.toml` per a les altres funcions (funcionen 
 - `Challenge.id` és `number | string` (a la pràctica, UUID string). `Submission.challengeId` també. `ServerSubmission` (a `types.ts`) descriu els enviaments del servidor per al jutge. Els enviaments de l'equip (`teamSubmissions`) tenen el seu tipus dins d'`App.tsx` i de `SummaryScreen.tsx` (`TeamSubmission`).
 - `selectedChallengeIds` és `Record<string, string>` (cadena buida = cap repte triat).
 - `createTeam` no genera reptes de prova (rep `challenges` per paràmetre).
-- **Ja usen el servidor:** login del jutge, creació de partida, entrada dels equips, reptes i aprovacions, estat pendent de l'equip, pujada de fotos, llista i revisió de fotos del jutge (cada 5 s), selector de partida, iniciar/pausar/reprendre, temps, estat i final a les dues pantalles, modal de resultat i resum de l'equip, i el reinici de la partida.
-- **Encara existeixen en local (ja no es mostren, es retiren al pas 6):** `teams` (part local: `seconds`, `finished`), `submissions` (antics enviaments locals), `running`, `gameStarted`, `now`, `gameStartReference`, `getDisplayedSeconds`, `reviewSubmission`, `simulateSubmission`, `winner`, `scoreWinner`, `gameCompletedByWinner`, `allTeamsFinished`, `startGame`, `pauseGame`, `resetGame`, el `localStorage` (`gimkana-game-state`), la secció de moderació antiga "Fotos pendients" i l'"Historial de revisions" local.
+- **Tot usa el servidor:** login del jutge, creació de partida, entrada dels equips, reptes i aprovacions, estat pendent de l'equip, pujada de fotos, llista i revisió de fotos del jutge (cada 5 s), selector de partida, iniciar/pausar/reprendre, temps, estat i final a les dues pantalles, modal de resultat i resum de l'equip, i el reinici de la partida.
+- **Codi local retirat (pas 6, confirmat):** el temporitzador local, el `localStorage` (`gimkana-game-state`), els enviaments i la moderació locals, el càlcul local del guanyador, les seccions "Fotos pendients" i "Historial de revisions" locals i el peu de pàgina "Prototipo local". També s'han tret de `utils.ts` (`createTeam`, `INITIAL_SECONDS`, `BONUS_SECONDS`, `GAME_STORAGE_KEY`; ara només hi ha `formatTime`) i de `types.ts` (el tipus `Submission`). Els navegadors que ja havien obert l'app poden tenir encara la clau `gimkana-game-state` al `localStorage`; no fa res.
+- Estats de la sessió de l'equip a `App.tsx`: `teamData`, `teamSubmissions`, `teamClock`, `teamNow`, `teamResult` (i el derivat `currentTeam`). Estats del jutge: `judgeGames`, `selectedGameId`, `serverSubmissions`, `judgeServer`, `judgeNow`.
 - Funcions del servidor a `App.tsx`: `uploadPhotoToServer`, `syncGameState`, `loadServerSubmissions`, `handleServerReview`, `refreshTeamFromServer`, `handleJudgeStartPause`, `handleJudgeReset`, `getTeamRemainingSeconds`.
 
 ---
@@ -321,21 +321,20 @@ Fet i confirmat que funciona:
 13. `src/screens/JudgeTeamGrid.tsx` (targetes dels equips del panell; ara rep `pendingCounts`).
 14. `src/screens/ServerModerationSection.tsx` (secció de moderació del servidor).
 
-Sense extreure (continuen dins d'`App.tsx`): la barra de control (Iniciar/Pausar/Reiniciar), la moderació antiga (local), l'historial, el modal de resultat i el temporitzador local.
+Sense extreure (continuen dins d'`App.tsx`): la barra de control (Iniciar/Pausar/Reiniciar), el selector de partida i el modal de resultat.
 
 ---
 
 ## 8. Problemes coneguts
 
 - **Durada de les partides de prova:** el botó Reiniciar manté `duration_seconds`; per canviar-la (p. ex. 60 s per provar el final per temps) cal fer servir la consulta SQL de la secció 11. Atenció: si la taula `games` no es reinicia (estat `finished`), les pantalles continuen mostrant el resultat antic.
-- **Codi local antic** encara actiu per dins (secció 6): el `useEffect` d'autoguardat escriu a `localStorage` cada 250 ms mentre `running` local és cert, i dues pestanyes del mateix navegador es trepitgen aquest estat. Ja no afecta el que es mostra, però s'ha de retirar (pas 6).
 - L'equip no veu el motiu d'un rebuig durant la partida (només el veu al resum final i el jutge).
-- L'historial del jutge ("Historial de revisions") encara és local i surt buit.
+- Si l'enviament d'una foto falla (p. ex. partida en pausa), l'equip no veu cap missatge: només surt a la consola (`submit-photo:`).
+- El panell del jutge no té modal ni avís de qui ha guanyat (només l'estat FINALITZADA i el motiu de final de cada equip).
 - Els enllaços de les fotos caduquen als 60 minuts; com que les consultes són cada 5 s, es renoven sols mentre la pantalla és oberta.
 - L'aprovació del jutge té un petit retard (arrencada en fred de les funcions).
 - Fotos òrfenes al bucket de proves antigues (de files de `submissions` esborrades a mà): `judge-reset-game` les esborra en reiniciar cada partida. La consulta SQL de la secció 11 no esborra fitxers.
-- Textos barrejats en castellà i català (p. ex. "Equipo A" als equips locals, "Tiempo agotado", "Panel de control del monitor", "por foto"); la interfície ha de ser en català (pas 8).
-- El peu de pàgina del panell del jutge diu "Prototipo local: los datos se reinician al recargar la página", que ja no és cert.
+- Textos barrejats en castellà i català (p. ex. "Panel de control del monitor", "por foto" a `JudgeHeader`, "Obtindras 3 minuts per cada fotografia correcte" sense accent); la interfície ha de ser en català (pas 8).
 - El document de requisits preveu accés del jutge amb codi d'administrador; l'app fa servir correu i contrasenya (Supabase Auth). Decidit mantenir correu i contrasenya.
 - **Git (endreçat el 24/10/2026):** hi ha un `.gitignore` i Git ja no segueix `node_modules`, `dist`, `supabase/.temp`, `.env.local` ni `*.tsbuildinfo` (els fitxers continuen a l'ordinador). S'han esborrat els fitxers antics `src/App.js`, `src/main.js`, `src/App.backup.txt` i `error.txt` (recuperables des del primer commit). Els commits nous encara NO s'han pujat a GitHub. El primer commit, que ja és a GitHub, conté aquests fitxers a l'historial; `.env.local` només té la URL i la clau publishable (pública per disseny), no cap clau secreta. Pendent: comprovar si el repositori de GitHub és públic o privat.
 
@@ -361,7 +360,7 @@ Fet: enviaments a `submissions`, llista i revisió del jutge, aprovació de rept
 ### Fase 4 — Emmagatzematge permanent de fotografies: FET
 Bucket privat, pujada per Edge Function i enllaços temporals. Pendent de decidir: compressió abans de pujar, límit de mida i tipus de fitxer al bucket (vegeu 4.11).
 
-### Fase 5 — Temporitzador i estat de la partida compartits (EN CURS: passos 1-5 i 7 fets; queden el 6 i el 8)
+### Fase 5 — Temporitzador i estat de la partida compartits (EN CURS: passos 1-7 fets; queda el 8)
 
 Disseny acordat:
 - Un sol rellotge per partida al servidor. Temps transcorregut = `elapsed_seconds` + (ara − `clock_started_at`, només si l'estat és `active`).
@@ -378,9 +377,9 @@ Passos:
 3. FET i confirmat: `submit-photo` exigeix partida `active` i equip no acabat.
 4. FET i confirmat: `review-submission` bloqueja l'aprovació si l'equip ja ha acabat i desa el final de l'equip i la partida en aprovar l'últim repte.
 5. FET i confirmat: frontend de l'equip i del jutge (temps, estat, final, botons, modal de resultat i resum) a partir del servidor (4.16, 4.17). Commit `8188f8f`.
-6. **PENDENT (següent pas):** retirar el temporitzador local i l'estat local de partida (secció 6: `localStorage`, `running`, moderació antiga, historial local, etc.). `handleJudgeReset` encara crida `resetGame` local: treure aquesta crida en aquest pas.
+6. FET i confirmat: retirat el temporitzador local i tot l'estat local de partida (secció 6).
 7. FET i confirmat: reinici al servidor amb `judge-reset-game` i el botó Reiniciar (`handleJudgeReset`, amb confirmació). Decisió presa: els enviaments antics i les seves fotos s'esborren (no s'arxiven).
-8. PENDENT: textos, passar tota la interfície a català.
+8. **PENDENT (següent pas):** textos, passar tota la interfície a català.
 
 ### Fase 6 — Temps real
 Realtime no està configurat; es fa servir consulta cada 5 s (equip i jutge). Els tokens dels equips són personalitzats, no JWT de Supabase Auth: no s'ha de donar per fet que poden subscriure's directament; cal dissenyar l'accés de manera segura (o mantenir la consulta periòdica).
@@ -396,7 +395,7 @@ Provar jutge i dos equips amb dispositius diferents de debò (ara ja és possibl
 
 Estàs al xat de VS Code amb accés al repositori: llegeix tu mateix `src/App.tsx` i la resta de fitxers abans de proposar canvis.
 
-**Següent pas:** Fase 5, pas 6: retirar el codi local antic (secció 6), provant que tot continua funcionant.
+**Següent pas:** Fase 5, pas 8: passar tots els textos de la interfície a català (revisar totes les pantalles de `src/screens/` i `App.tsx`). Després, triar entre la Fase 2 (biblioteca de reptes, perquè les partides noves tinguin reptes) i la Fase 7 (publicar i provar amb dispositius reals).
 
 ---
 

@@ -1,10 +1,9 @@
-
-import { useEffect, useRef, useState } from "react";
-import { Camera, Check, CircleAlert, Pause, Play, RotateCcw, ShieldCheck, Trophy, X,} from "lucide-react";
+import { useEffect, useState } from "react";
+import { Pause, Play, RotateCcw, ShieldCheck, Trophy } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import type { Challenge, Team, Submission, ServerSubmission } from "./types";
-import {INITIAL_SECONDS, BONUS_SECONDS, GAME_STORAGE_KEY, createTeam, formatTime,} from "./utils";
+import type { Challenge, Team, ServerSubmission } from "./types";
+import { formatTime } from "./utils";
 import HomeScreen from "./screens/HomeScreen";
 import TeamLoginScreen from "./screens/TeamLoginScreen";
 import JudgeLoginScreen from "./screens/JudgeLoginScreen";
@@ -72,6 +71,13 @@ export default function App() {
       photoUrl?: string;
     }[]
   >([]);
+
+  // Equip que ha entrat (nom i reptes de get-team-game).
+  const [teamData, setTeamData] = useState<{
+    key: string;
+    name: string;
+    challenges: Challenge[];
+  } | null>(null);
 
   // Resultat de la partida calculat pel servidor (get-team-game).
   const [teamResult, setTeamResult] = useState<{
@@ -248,14 +254,7 @@ export default function App() {
   }
 
   async function handleJudgeStartPause() {
-    if (judgeRunning) {
-      pauseGame();
-      await syncGameState("pause");
-    } else {
-      startGame();
-      await syncGameState("start");
-    }
-
+    await syncGameState(judgeRunning ? "pause" : "start");
     await loadServerSubmissions();
   }
 
@@ -280,8 +279,6 @@ export default function App() {
       return;
     }
 
-    // També reiniciem l'estat local mentre encara existeixi (pas 6).
-    resetGame();
     await loadServerSubmissions();
   }
 
@@ -331,17 +328,11 @@ export default function App() {
       })
     );
 
-    setTeams((currentTeams) =>
-      currentTeams.map((item) =>
-        item.id === teamKey
-          ? {
-              ...item,
-              name: data.team?.name ?? item.name,
-              challenges: loadedChallenges,
-            }
-          : item
-      )
-    );
+    setTeamData({
+      key: teamKey,
+      name: data.team?.name ?? `Equip ${teamKey}`,
+      challenges: loadedChallenges,
+    });
 
     setTeamSubmissions(data.submissions ?? []);
     setTeamResult(data.result ?? null);
@@ -392,68 +383,17 @@ export default function App() {
         (teamClock.gameStatus === "active" && teamRemainingSeconds <= 0))
   );
 
-  const [savedState] = useState(() => {
-    try {
-      const raw = localStorage.getItem(GAME_STORAGE_KEY);
-
-      if (!raw) return null;
-
-      const parsed = JSON.parse(raw) as {
-        teams: Team[];
-        submissions: Submission[];
-        running: boolean;
-        gameStarted: boolean;
-        gameStartReference: number;
-      };
-
-      // Si la partida continuava activa, descomptem
-      // el temps transcorregut mentre la pàgina era tancada.
-      if (parsed.running) {
-        const timestamp = Date.now();
-        const elapsed =
-          Math.max(0, timestamp - parsed.gameStartReference) / 1000;
-
-        return {
-          ...parsed,
-          teams: parsed.teams.map((team) =>
-            team.finished
-              ? team
-              : {
-                  ...team,
-                  seconds: Math.max(0, team.seconds - elapsed),
-                }
-          ),
-          gameStartReference: timestamp,
-        };
+  // L'equip que ha entrat, en el format que esperen les pantalles.
+  const currentTeam: Team | null = teamData
+    ? {
+        id: teamData.key,
+        name: teamData.name,
+        seconds: teamRemainingSeconds,
+        challenges: teamData.challenges,
+        finished: teamFinished,
+        finishReason: null,
       }
-
-      return parsed;
-    } catch {
-      return null;
-    }
-  });
-
-  const [teams, setTeams] = useState<Team[]>(
-    () =>
-      savedState?.teams ?? [
-        createTeam("A", "Equipo A"),
-        createTeam("B", "Equipo B"),
-      ]
-  );
-
-  const [submissions, setSubmissions] = useState<Submission[]>(
-    () => savedState?.submissions ?? []
-  );
-
-  const [running, setRunning] = useState(
-    () => savedState?.running ?? false
-  );
-
-  const [gameStarted, setGameStarted] = useState(
-    () => savedState?.gameStarted ?? false
-  );
-
-  const [now, setNow] = useState(Date.now());
+    : null;
 
   const [selectedChallengeIds, setSelectedChallengeIds] = useState<
     Record<string, string>
@@ -462,88 +402,11 @@ export default function App() {
     B: "",
   });
 
-  const [rejectionComments, setRejectionComments] = useState<
-    Record<number, string>
-  >({});
-
-  const [rejectionTarget, setRejectionTarget] = useState<number | null>(
-    null
-  );
-
-  const nextSubmissionId = useRef(1);
-  nextSubmissionId.current =
-    Math.max(0, ...submissions.map((item) => item.id)) + 1;
-
-  useEffect(() => {
-    if (!running) return;
-
-    const interval = window.setInterval(() => {
-      setNow(Date.now());
-    }, 250);
-
-    return () => window.clearInterval(interval);
-  }, [running]);
-
-  
-  useEffect(() => {
-    localStorage.setItem(
-      GAME_STORAGE_KEY,
-      JSON.stringify({
-        teams,
-        submissions,
-        running,
-        gameStarted,
-        gameStartReference: gameStartReference.current,
-      })
-    );
-  }, [teams, submissions, running, gameStarted, now]);
-
-
-useEffect(() => {
-  if (!running) return;
-
-  const expiredTeamIds = teams
-    .filter(
-      (team) =>
-        !team.finished &&
-        getDisplayedSeconds(team) <= 0
-    )
-    .map((team) => team.id);
-
-  if (expiredTeamIds.length === 0) return;
-
-  setTeams((currentTeams) =>
-    currentTeams.map((team) =>
-      expiredTeamIds.includes(team.id)
-        ? {
-            ...team,
-            seconds: 0,
-            finished: true,
-            finishReason: "Tiempo agotado",
-          }
-        : team
-    )
-  );
-}, [running, teams, now]);
-
-  const allTeamsFinished = teams.every((team) => team.finished);
-  const pendingCount = submissions.filter(
-    (submission) => submission.status === "pending"
-  ).length;
-
-  
-  const approvedCount = submissions.filter(
-    (submission) => submission.status === "approved"
-  ).length;
-
-  const rejectedCount = submissions.filter(
-    (submission) => submission.status === "rejected"
-  ).length;
 
     async function syncGameState(action: "start" | "pause") {
     if (!selectedGameId) return;
 
-    const { data, error } = await supabase.functions.invoke(
+    const { error } = await supabase.functions.invoke(
       "judge-set-game-state",
       { body: { gameId: selectedGameId, action } }
     );
@@ -552,57 +415,7 @@ useEffect(() => {
       const detail =
         error.context instanceof Response ? await error.context.text() : "";
       console.error("judge-set-game-state:", error.message, detail);
-      return;
     }
-
-  }
-
-  
-  function startGame() {
-    if (allTeamsFinished) return;
-
-    gameStartReference.current = Date.now();
-    setNow(Date.now());
-    setGameStarted(true);
-    setRunning(true);
-  }
-
-  function pauseGame() {
-    if (!running) return;
-
-    const timestamp = Date.now();
-    const elapsed =
-      (timestamp - gameStartReference.current) / 1000;
-
-    setTeams((currentTeams) =>
-      currentTeams.map((team) =>
-        team.finished
-          ? team
-          : {
-              ...team,
-              seconds: Math.max(0, team.seconds - elapsed),
-            }
-      )
-    );
-
-    setNow(timestamp);
-    setRunning(false);
-  }
-
-  function resetGame() {
-    const freshTeams = [
-      createTeam("A", "Equipo A"),
-      createTeam("B", "Equipo B"),
-    ];
-
-    setTeams(freshTeams);
-    setSubmissions([]);
-    setRunning(false);
-    setGameStarted(false);
-    setNow(Date.now());
-    gameStartReference.current = Date.now();
-    localStorage.removeItem(GAME_STORAGE_KEY);
-    nextSubmissionId.current = 1;
   }
 
   async function uploadPhotoToServer(challengeId: string, file: File) {
@@ -631,162 +444,6 @@ useEffect(() => {
 
     console.log("Enviament desat a Supabase:", data);
   }
-
-function simulateSubmission(
-  teamId: string,
-  challengeId: number | string,
-  file: File
-) {
-  const team = teams.find((item) => item.id === teamId);
-
-  if (!team || team.finished || !running) return;
-
-  // Cada equip només pot tenir una foto pendent.
-  const teamHasPending = submissions.some(
-    (submission) =>
-      submission.teamId === teamId &&
-      submission.status === "pending"
-  );
-
-  if (teamHasPending) {
-    alert(
-      "Aquest equip ja té una fotografia pendent de validació. Espera que el monitor la revisi."
-    );
-    return;
-  }
-
-  const challenge = team.challenges.find(
-    (item) => String(item.id) === String(challengeId)
-  );
-
-  if (!challenge) {
-    alert("Selecciona un repte vàlid.");
-    return;
-  }
-
-  if (challenge.approved) {
-    alert("Aquest repte ja està aprovat. Tria'n un altre.");
-    return;
-  }
-
-  const photoUrl = URL.createObjectURL(file);
-
-  setSubmissions((current) => [
-    ...current,
-    {
-      id: nextSubmissionId.current++,
-      teamId,
-      challengeId: challenge.id,
-      title: challenge.title,
-      photoUrl,
-      receivedAt: Date.now(),
-      status: "pending",
-      comment: "",
-    },
-  ]);
-}
-
-
-  function reviewSubmission(
-    submissionId: number,
-    approve: boolean,
-    comment = ""
-  ) {
-    const submission = submissions.find(
-      (item) => item.id === submissionId
-    );
-
-    if (!submission || submission.status !== "pending") return;
-
-    if (!approve && !comment.trim()) return;
-
-    const team = teams.find(
-      (item) => item.id === submission.teamId
-    );
-
-    if (!team) return;
-
-    
-    if (approve && team.finished) {
-      alert(
-        "No es pot aprovar la fotografia: aquest equip ja ha acabat la partida."
-      );
-      return;
-    }
-
-    if (approve) {
-      const challenge = team.challenges.find(
-        (item) => item.id === submission.challengeId
-      );
-
-      if (!challenge || challenge.approved) {
-        alert(
-          "No es pot aprovar aquesta fotografia: el repte ja està aprovat o no existeix."
-        );
-        return;
-      }
-    }
-
-    setSubmissions((current) =>
-      current.map((item) =>
-        item.id === submissionId
-          ? {
-              ...item,
-              status: approve ? "approved" : "rejected",
-              comment: approve ? "" : comment.trim(),
-            }
-          : item
-      )
-    );
-
-    if (!approve) return;
-
-    setTeams((currentTeams) =>
-      currentTeams.map((item) => {
-        if (item.id !== submission.teamId || item.finished) {
-          return item;
-        }
-
-        const challenges = item.challenges.map((challenge) =>
-          challenge.id === submission.challengeId
-            ? { ...challenge, approved: true }
-            : challenge
-        );
-
-        const completed = challenges.every(
-          (challenge) => challenge.approved
-        );
-
-        return {
-          ...item,
-          seconds: item.seconds + BONUS_SECONDS,
-          challenges,
-          finished: completed,
-          finishReason: completed ? "Lista completada" : null,
-        };
-      })
-    );
-  }
-
-  function getDisplayedSeconds(team: Team) {
-    if (!running || team.finished) {
-      return Math.max(0, team.seconds);
-    }
-
-    const elapsed = (now - gameStartReference.current) / 1000;
-    return Math.max(0, team.seconds - elapsed);
-  }
-
-  // Referencia provisional para la simulación local.
-  const gameStartReference = useRef(
-  savedState?.gameStartReference ?? Date.now()
-);
-
-  useEffect(() => {
-    if (running) {
-      gameStartReference.current = Date.now();
-    }
-  }, [running]);
 
     useEffect(() => {
     supabase.auth.getSession().then(({ data, error }) => {
@@ -924,18 +581,11 @@ function simulateSubmission(
           })
         );
 
-        // Actualitzem només l'equip que acaba d'entrar
-        setTeams((currentTeams) =>
-          currentTeams.map((item) =>
-            item.id === team
-              ? {
-                  ...item,
-                  name: gameData.team?.name ?? item.name,
-                  challenges: loadedChallenges,
-                }
-              : item
-          )
-        );
+        setTeamData({
+          key: team,
+          name: gameData.team?.name ?? `Equip ${team}`,
+          challenges: loadedChallenges,
+        });
 
         setEntryScreen("home");
         setCurrentView(team === "A" ? "teamA" : "teamB");
@@ -988,36 +638,6 @@ function simulateSubmission(
       setCreatingGame(false);
     }
   }
-
-const finishedTeams = teams.filter((team) => team.finished);
-
-const winner = finishedTeams.find(
-  (team) => team.finishReason === "Lista completada"
-);
-
-const gameCompletedByWinner = Boolean(winner);
-
-useEffect(() => {
-  if (gameCompletedByWinner && running) {
-    pauseGame();
-  }
-}, [gameCompletedByWinner, running]);
-
-const approvedCounts = teams.map((team) => ({
-  ...team,
-  approvedCount: team.challenges.filter(
-    (challenge) => challenge.approved
-  ).length,
-}));
-
-const scoreWinner =
-  approvedCounts.length === 2
-    ? approvedCounts[0].approvedCount > approvedCounts[1].approvedCount
-      ? approvedCounts[0]
-      : approvedCounts[1].approvedCount > approvedCounts[0].approvedCount
-        ? approvedCounts[1]
-        : null
-    : null;
 
   return (
     <main className="app-shell">
@@ -1074,9 +694,10 @@ const scoreWinner =
           (currentView === "teamB" && entryScreen === "team-b-login")
         ) && (
         <section className="team-player-view">
-          {teams
-            .filter((team) =>
-              currentView === "teamA" ? team.id === "A" : team.id === "B"
+          {[currentTeam]
+            .filter(
+              (team): team is Team =>
+                team?.id === (currentView === "teamA" ? "A" : "B")
             )
             .map((team) => (
               <TeamPlayerScreen
@@ -1106,7 +727,6 @@ const scoreWinner =
 
                   if (!challengeId) return;
 
-                  // simulateSubmission(team.id, challengeId, file);
                   uploadPhotoToServer(challengeId, file);
 
                   setSelectedChallengeIds((previous) => ({
@@ -1177,7 +797,7 @@ const scoreWinner =
       
           {(currentView === "summaryA" || currentView === "summaryB") && (() => {
             const teamId = currentView === "summaryA" ? "A" : "B";
-            const team = teams.find((item) => item.id === teamId);
+            const team = currentTeam?.id === teamId ? currentTeam : null;
 
             if (!team) return null;
 
@@ -1283,239 +903,6 @@ const scoreWinner =
           </button>
         </div>
       </section>
-
-      <section className="submissions-section">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">MODERACIÓ</p>
-            <h2>Fotos pendients</h2>
-          </div>
-          <span className="count-badge">{pendingCount}</span>
-        </div>
-
-        {submissions.filter((item) => item.status === "pending").length ===
-        0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">
-              <Camera size={25} />
-            </div>
-            <strong>No hi ha fotos pendients</strong>
-            <p>
-              Quan un equip envíi una foto, podràs revisar-la aquí.
-            </p>
-          </div>
-        ) : (
-          <div className="submission-list">
-            {submissions
-              .filter((item) => item.status === "pending")
-              .sort((a, b) => a.receivedAt - b.receivedAt)
-              .map((submission) => (
-                <article className="submission-card" key={submission.id}>
-                  
-                  <div className="submission-preview">
-                    <img
-                      src={submission.photoUrl}
-                      alt={`Fotografia del repte: ${submission.title}`}
-                      style={{
-                        width: "100%",
-                        maxHeight: "320px",
-                        objectFit: "contain",
-                        borderRadius: "8px",
-                      }}
-                    />
-                  </div>
-                  <div className="submission-info">
-                    <span className={`mini-team team-${submission.teamId}`}>
-                      {submission.teamId === "A" ? "Equip A" : "Equip B"}
-                    </span>
-                    <h3>{submission.title}</h3>
-                    <p>
-                      Rebuda a les{" "}
-                      {new Date(submission.receivedAt).toLocaleTimeString("ca-ES", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
-                    </p>
-
-                    <p>Estat: pendent de validació</p>
-                    <div className="review-actions">
-                      <button
-                        className="approve-button"
-                        onClick={() =>
-                          reviewSubmission(submission.id, true)
-                        }
-                      >
-                        <Check size={16} /> Aprovar · +3 min
-                      </button>
-                      <button
-                        className="reject-button"
-                        onClick={() => {
-                          setRejectionTarget(submission.id);
-                          setRejectionComments((current) => ({
-                            ...current,
-                            [submission.id]: current[submission.id] ?? "",
-                          }));
-                        }}
-                      >
-                        <X size={16} /> Rebutjar
-                      </button>
-                    </div>
-                    
-                    {rejectionTarget === submission.id && (
-                      <div className="rejection-form">
-                        <label htmlFor={`rejection-${submission.id}`}>
-                          Motiu del rebuig (obligatori)   
-                        </label>
-
-                        <textarea
-                          id={`rejection-${submission.id}`}
-                          value={rejectionComments[submission.id] ?? ""}
-                          onChange={(event) =>
-                            setRejectionComments((current) => ({
-                              ...current,
-                              [submission.id]: event.target.value,
-                            }))
-                          }
-                          placeholder="Explica per què no s'accepta aquesta fotografia..."
-                          rows={3}
-                          required
-                        />
-
-                        <div className="review-actions">
-                          <button
-                            className="reject-button"
-                            disabled={!(rejectionComments[submission.id] ?? "").trim()}
-                            onClick={() => {
-                              reviewSubmission(
-                                submission.id,
-                                false,
-                                rejectionComments[submission.id] ?? ""
-                              );
-                              setRejectionTarget(null);
-                            }}
-                          >
-                            Confirmar rebuig
-                          </button>
-
-                          <button
-                            type="button"
-                            className="approve-button"
-                            onClick={() => setRejectionTarget(null)}
-                          >
-                            Cancel·lar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </article>
-              ))}
-          </div>
-        )}
-      </section>
-
-      
-      <section className="submissions-section">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">REGISTRE</p>
-            <h2>Historial de revisions</h2>
-          </div>
-          <span className="count-badge">
-            {approvedCount + rejectedCount}
-          </span>
-        </div>
-
-        <div className="history-summary">
-          <span>Aprovades: {approvedCount} | </span>
-          <span> Rebutjades: {rejectedCount}</span>
-        </div>
-
-        {submissions.filter(
-          (submission) =>
-            submission.status === "approved" ||
-            submission.status === "rejected"
-        ).length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">
-              <ShieldCheck size={25} />
-            </div>
-            <strong>Encara no hi ha revisions</strong>
-            <p>
-              Les fotografies aprovades i rebutjades apareixeran aquí.
-            </p>
-          </div>
-        ) : (
-          <div className="submission-list">
-            {submissions
-              .filter(
-                (submission) =>
-                  submission.status === "approved" ||
-                  submission.status === "rejected"
-              )
-              .sort((a, b) => b.receivedAt - a.receivedAt)
-              .map((submission) => (
-                <article
-                  className="submission-card"
-                  key={submission.id}
-                >
-                  <div className="submission-preview">
-                    <img
-                      src={submission.photoUrl}
-                      alt={`Fotografia del repte: ${submission.title}`}
-                      style={{
-                        width: "100%",
-                        maxHeight: "240px",
-                        objectFit: "contain",
-                        borderRadius: "8px",
-                      }}
-                    />
-                  </div>
-                  <div className="submission-info">
-                    <span
-                      className={`mini-team team-${submission.teamId}`}
-                    >
-                      {submission.teamId === "A"
-                        ? "Equip A"
-                        : "Equip B"}
-                    </span>
-
-                    <h3>{submission.title}</h3>
-
-                    <p>
-                      Rebuda:{" "}
-                      {new Date(submission.receivedAt).toLocaleString(
-                        "ca-ES"
-                      )}
-                    </p>
-
-                    <p>
-                      Resultat:{" "}
-                      <strong>
-                        {submission.status === "approved"
-                          ? "Aprovada"
-                          : "Rebutjada"}
-                      </strong>
-                    </p>
-
-                    {submission.status === "rejected" && (
-                      <p>
-                        <strong>Motiu:</strong>{" "}
-                        {submission.comment || "Sense comentari"}
-                      </p>
-                    )}
-                  </div>
-                </article>
-              ))}
-          </div>
-        )}
-      </section>
-
-      <footer className="footer-note">
-        <CircleAlert size={15} />
-        Prototipo local: los datos se reinician al recargar la página.
-      </footer>
       </>
     )}
     </main>

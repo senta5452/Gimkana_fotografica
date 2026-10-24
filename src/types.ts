@@ -13,18 +13,6 @@ export type Team = {
   finishReason: string | null;
 };
 
-export type Submission = {
-  id: number;
-  teamId: string;
-  challengeId: number | string;
-  title: string;
-  photoUrl: string;
-  receivedAt: number;
-  status: "pending" | "approved" | "rejected";
-  comment: string;
-};
-
-
 export type ServerSubmission = {
   id: string;
   teamId: string;
