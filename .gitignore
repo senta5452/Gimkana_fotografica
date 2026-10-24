@@ -1,0 +1,22 @@
+# Dependències (es tornen a instal·lar amb npm.cmd install)
+node_modules/
+supabase/functions/*/node_modules/
+
+# Resultat de npm.cmd run build
+dist/
+
+# Variables d'entorn locals
+.env
+.env.local
+.env.*.local
+
+# Fitxers interns de la CLI de Supabase
+supabase/.temp/
+
+# Fitxers generats
+*.tsbuildinfo
+*.log
+
+# Fitxers del sistema
+.DS_Store
+Thumbs.db

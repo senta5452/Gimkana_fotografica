@@ -17,7 +17,7 @@ Estic desenvolupant una aplicació web anomenada **Gimcana Fotogràfica**. Soc p
 - No demanis contrasenyes, tokens ni claus secretes.
 - Quan hagis de crear una Edge Function nova, segueix el mateix patró de les que ja funcionen (vegeu secció 5).
 
-**Punt exacte per reprendre:** decidir si s'endreça Git (secció 8) i després Fase 5, pas 6 (secció 9): retirar el codi local antic. Els passos 1-5 i 7 de la Fase 5 estan fets i confirmats. Última actualització del document: 24/10/2026.
+**Punt exacte per reprendre:** Fase 5, pas 6 (secció 9): retirar el codi local antic. Git ja està endreçat (secció 8). Els passos 1-5 i 7 de la Fase 5 estan fets i confirmats. Última actualització del document: 24/10/2026.
 
 **Entorn de treball:** treballo al xat de VS Code (Claude Code), que té accés a tot el repositori. L'assistent llegeix ell mateix els fitxers del projecte (`src/App.tsx`, `supabase/functions/...`); no cal que enganxi fragments de codi. Les normes de treball continuen valent igual (un pas petit, esperar la meva confirmació, no demanar-me claus). Si l'assistent ha de modificar fitxers, m'explica abans què canviarà i en quins fitxers, i després de cada canvi em diu exactament què he de provar. Les publicacions de les Edge Functions les faig jo amb `npx.cmd supabase functions deploy <nom>`.
 
@@ -337,7 +337,7 @@ Sense extreure (continuen dins d'`App.tsx`): la barra de control (Iniciar/Pausar
 - Textos barrejats en castellà i català (p. ex. "Equipo A" als equips locals, "Tiempo agotado", "Panel de control del monitor", "por foto"); la interfície ha de ser en català (pas 8).
 - El peu de pàgina del panell del jutge diu "Prototipo local: los datos se reinician al recargar la página", que ja no és cert.
 - El document de requisits preveu accés del jutge amb codi d'administrador; l'app fa servir correu i contrasenya (Supabase Auth). Decidit mantenir correu i contrasenya.
-- **Git:** no hi ha cap `.gitignore`. Per això el repositori inclou `node_modules` (més de 12.000 fitxers), `dist`, `supabase/.temp`, fitxers antics (`src/App.js`, `src/main.js`, `src/App.backup.txt`, `error.txt`) i `.env.local`. El repositori ja és a GitHub (`origin/main`). `.env.local` només té la URL i la clau publishable (que de totes maneres és pública, perquè va dins del frontend), no cap clau secreta. Cal decidir si s'afegeix un `.gitignore` i es treuen aquests fitxers del seguiment (sense esborrar-los de l'ordinador), i si el repositori de GitHub és públic o privat.
+- **Git (endreçat el 24/10/2026):** hi ha un `.gitignore` i Git ja no segueix `node_modules`, `dist`, `supabase/.temp`, `.env.local` ni `*.tsbuildinfo` (els fitxers continuen a l'ordinador). S'han esborrat els fitxers antics `src/App.js`, `src/main.js`, `src/App.backup.txt` i `error.txt` (recuperables des del primer commit). Els commits nous encara NO s'han pujat a GitHub. El primer commit, que ja és a GitHub, conté aquests fitxers a l'historial; `.env.local` només té la URL i la clau publishable (pública per disseny), no cap clau secreta. Pendent: comprovar si el repositori de GitHub és públic o privat.
 
 ---
 
@@ -386,7 +386,7 @@ Passos:
 Realtime no està configurat; es fa servir consulta cada 5 s (equip i jutge). Els tokens dels equips són personalitzats, no JWT de Supabase Auth: no s'ha de donar per fet que poden subscriure's directament; cal dissenyar l'accés de manera segura (o mantenir la consulta periòdica).
 
 ### Fase 7 — Proves i publicació
-Provar jutge i dos equips amb dispositius diferents de debò (ara ja és possible, perquè el rellotge i l'estat són del servidor), recàrregues i permisos; publicar a Vercel/Netlify amb variables d'entorn de producció i provar amb la URL pública (la càmera funciona millor amb HTTPS). El projecte ja és a GitHub; cal endreçar el repositori abans (vegeu Git a la secció 8).
+Provar jutge i dos equips amb dispositius diferents de debò (ara ja és possible, perquè el rellotge i l'estat són del servidor), recàrregues i permisos; publicar a Vercel/Netlify amb variables d'entorn de producció i provar amb la URL pública (la càmera funciona millor amb HTTPS). El projecte ja és a GitHub i el repositori està endreçat (vegeu Git a la secció 8).
 
 ---
 
@@ -396,7 +396,7 @@ Provar jutge i dos equips amb dispositius diferents de debò (ara ja és possibl
 
 Estàs al xat de VS Code amb accés al repositori: llegeix tu mateix `src/App.tsx` i la resta de fitxers abans de proposar canvis.
 
-**Següent pas:** decidir si s'endreça Git (`.gitignore`, secció 8) i després Fase 5, pas 6: retirar el codi local antic (secció 6), provant que tot continua funcionant.
+**Següent pas:** Fase 5, pas 6: retirar el codi local antic (secció 6), provant que tot continua funcionant.
 
 ---
 
