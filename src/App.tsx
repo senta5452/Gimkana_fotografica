@@ -1058,6 +1058,13 @@ export default function App() {
 
     {currentView === "judgeGame" && session && (
       <>
+      <JudgeHeader
+        durationSeconds={judgeServer?.durationSeconds ?? null}
+        running={judgeRunning}
+        gameStarted={judgeStarted}
+        allTeamsFinished={judgeFinished}
+      />
+
       <section className="team-card" style={{ marginBottom: 24, padding: 24 }}>
         <button
           className="secondary-button"
@@ -1074,12 +1081,6 @@ export default function App() {
           />
         )}
       </section>
-      <JudgeHeader
-        durationSeconds={judgeServer?.durationSeconds ?? null}
-        running={judgeRunning}
-        gameStarted={judgeStarted}
-        allTeamsFinished={judgeFinished}
-      />
 
       {judgeServer?.result?.over && (
         <section className="result-banner" role="status">
