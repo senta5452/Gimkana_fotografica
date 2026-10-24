@@ -1,5 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { getGameResult, getTeamClock } from "../_shared/game-clock.ts";
+import {
+  getApprovedBonusSeconds,
+  getGameResult,
+  getTeamClock,
+} from "../_shared/game-clock.ts";
 
 const BUCKET = "submission-photos";
 const SIGNED_URL_SECONDS = 60 * 60;
@@ -134,7 +138,7 @@ Deno.serve(async (req) => {
     }
 
      const challengesResponse = await fetch(
-      `${supabaseUrl}/rest/v1/challenges?team_id=eq.${team.id}&select=id,title,description,position,approved&order=position.asc`,
+      `${supabaseUrl}/rest/v1/challenges?team_id=eq.${team.id}&select=id,title,description,position,approved,bonus_seconds&order=position.asc`,
       { headers },
     );
 
@@ -155,12 +159,13 @@ Deno.serve(async (req) => {
 
     const submissions = await submissionsResponse.json();
 
-    const approvedCount = challenges.filter(
-      (challenge: { approved: boolean }) => challenge.approved,
-    ).length;
-
     const nowMs = Date.now();
-    const clock = getTeamClock(game, team, approvedCount, nowMs);
+    const clock = getTeamClock(
+      game,
+      team,
+      getApprovedBonusSeconds(challenges),
+      nowMs,
+    );
 
     // Equips de la partida i reptes aprovats de cadascun, per calcular
     // el resultat (cal conèixer també l'altre equip).
@@ -177,7 +182,7 @@ Deno.serve(async (req) => {
     const gameTeamIds = gameTeams.map((item: { id: string }) => item.id);
 
     const approvedResponse = await fetch(
-      `${supabaseUrl}/rest/v1/challenges?team_id=in.(${gameTeamIds.join(",")})&approved=is.true&select=team_id`,
+      `${supabaseUrl}/rest/v1/challenges?team_id=in.(${gameTeamIds.join(",")})&approved=is.true&select=team_id,approved,bonus_seconds`,
       { headers },
     );
 
@@ -185,7 +190,11 @@ Deno.serve(async (req) => {
       throw new Error("No s'han pogut consultar els reptes aprovats.");
     }
 
-    const approvedRows: { team_id: string }[] = await approvedResponse.json();
+    const approvedRows: {
+      team_id: string;
+      approved: boolean;
+      bonus_seconds: number | null;
+    }[] = await approvedResponse.json();
 
     const result = getGameResult(
       game.status,
@@ -198,15 +207,20 @@ Deno.serve(async (req) => {
           finish_reason: string | null;
           finish_elapsed_seconds: number | null;
         }) => {
-          const count = approvedRows.filter(
+          const teamRows = approvedRows.filter(
             (row) => row.team_id === item.id,
-          ).length;
+          );
 
           return {
             key: item.team_key,
             name: item.name,
-            approvedCount: count,
-            clock: getTeamClock(game, item, count, nowMs),
+            approvedCount: teamRows.length,
+            clock: getTeamClock(
+              game,
+              item,
+              getApprovedBonusSeconds(teamRows),
+              nowMs,
+            ),
           };
         },
       ),

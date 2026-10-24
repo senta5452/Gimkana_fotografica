@@ -17,7 +17,7 @@ Estic desenvolupant una aplicació web anomenada **Gimcana Fotogràfica**. Soc p
 - No demanis contrasenyes, tokens ni claus secretes.
 - Quan hagis de crear una Edge Function nova, segueix el mateix patró de les que ja funcionen (vegeu secció 5).
 
-**Punt exacte per reprendre:** les Fases 2 i 5 estan acabades i confirmades. Decisió: abans de publicar (Fase 7), fer tot el que es pugui en local, per no haver de publicar més vegades del necessari. Següent: millores locals pendents (secció 10). Git està endreçat i els commits es pugen a GitHub quan el canvi està provat.
+**Punt exacte per reprendre:** les Fases 2 i 5, els avisos a l'equip i els temps configurables estan acabats i confirmats. Decisió: abans de publicar (Fase 7), fer tot el que es pugui en local, per no haver de publicar més vegades del necessari. Següent: triar les millores locals que queden (secció 10). Git està endreçat i els commits es pugen a GitHub quan el canvi està provat.
 
 **Terminologia:** a la interfície, el rol de "jutge" es diu **monitor** (decisió del 24/10/2026). Tots els textos visibles del frontend diuen "monitor". Al codi (noms de funcions `judge-*`, components `Judge*`, comentaris) i en aquest document es continua dient "jutge". Última actualització del document: 24/10/2026.
 
@@ -74,8 +74,8 @@ Hi haurà tres accessos:
 Cada partida tindrà el seu propi codi, dos PINs, dos equips i els seus reptes.
 
 Funcionalitats desitjades:
-- Temporitzador de 20 minuts.
-- Afegir 3 minuts per cada repte aprovat.
+- Temporitzador de 20 minuts (configurable en crear la partida).
+- Afegir 3 minuts per cada repte aprovat (configurable per repte i per partida).
 - Pausar i reprendre el temporitzador.
 - Enviar fotografies per completar reptes.
 - El jutge aprova o rebutja fotografies i pot afegir comentaris.
@@ -145,7 +145,9 @@ La funció valida la sessió del jutge, genera un codi de partida i dos PINs ale
 
 Les partides de prova ja creades no s'han de donar per defecte com a partides de producció.
 
-Des de la Fase 2 (confirmat), `create-game` també rep `teamA` i `teamB`: llistes d'identificadors de reptes de `challenge_library` (entre 1 i 50 per equip, sense repetits). Comprova que siguin del jutge, crea els equips i copia els reptes a `challenges` (títol i descripció) amb un ordre barrejat a l'atzar per a cada equip (`position` comença per 1). Si falla la còpia, esborra la partida. Les partides creades abans de la Fase 2 entre el 23 i el 24/10 no tenen reptes (amb aquestes, en acabar el temps sempre surt "Empat!").
+Des de la Fase 2 (confirmat), `create-game` també rep `teamA` i `teamB`: llistes d'identificadors de reptes de `challenge_library` (entre 1 i 50 per equip, sense repetits). Comprova que siguin del jutge, crea els equips i copia els reptes a `challenges` (títol i descripció) amb un ordre barrejat a l'atzar per a cada equip (`position` comença per 1). Si falla la còpia, esborra la partida.
+
+Temps configurables (confirmat): `create-game` també rep `durationMinutes` (1-180, per defecte 20; es desa a `games.duration_seconds`) i `defaultBonusMinutes` (0-60, per defecte 3). Cada repte copiat rep `bonus_seconds` = el temps propi del repte de la biblioteca o, si no en té, `defaultBonusMinutes` × 60. El temps per defecte no es desa a la partida (només s'usa en copiar). Les partides creades abans de la Fase 2 entre el 23 i el 24/10 no tenen reptes (amb aquestes, en acabar el temps sempre surt "Empat!").
 
 ### 4.5. Entrada dels equips
 
@@ -182,13 +184,13 @@ El nom de la partida es mostra a la pantalla de l'equip mitjançant `joinedGameN
 
 Les sis taules existeixen: `games`, `teams`, `challenges`, `submissions`, `team_sessions` i `challenge_library` (Fase 2).
 
-`challenge_library`: `id` uuid, `judge_id` uuid (default `auth.uid()`, FK a auth.users, cascade), `title` text (1-120 caràcters), `description` text (nullable, fins a 500), `created_at`. Creada amb SQL el 24/10/2026.
+`challenge_library`: `id` uuid, `judge_id` uuid (default `auth.uid()`, FK a auth.users, cascade), `title` text (1-120 caràcters), `description` text (nullable, fins a 500), `created_at`, `bonus_seconds` int (nullable, 0-3600; buit = temps per defecte de la partida). Creada amb SQL el 24/10/2026.
 
 `games`: `id` uuid, `judge_id` uuid (FK a auth.users, cascade), `name` text, `status` text (default `setup`; només admet `setup`, `active`, `paused`, `finished`), `duration_seconds` int (default 1200, > 0), `started_at`, `finished_at`, `created_at`, `game_code` text (únic, en majúscules), `clock_started_at` timestamptz i `elapsed_seconds` double precision (default 0).
 
 `teams`: `id` uuid, `game_id` uuid (FK, cascade), `team_key` text (només `A` o `B`, únic per partida), `name`, `access_code_hash`, `created_at`, `finished_at` timestamptz, `finish_reason` text (només `completed` o `timeout`), `finish_elapsed_seconds` double precision.
 
-`challenges`: `id` uuid, `team_id` uuid, `title` text, `description` text (nullable), `position` int4, `approved` bool, `created_at`.
+`challenges`: `id` uuid, `team_id` uuid, `title` text, `description` text (nullable), `position` int4, `approved` bool, `created_at`, `bonus_seconds` int (obligatori, default 180, 0-3600; temps que afegeix en aprovar-lo; els reptes anteriors al canvi tenen 180).
 
 `submissions`: `id` uuid, `challenge_id` uuid (FK a challenges, cascade), `submitted_by_team` uuid (FK a teams, cascade), `photo_path` text (obligatori), `status` text (default `pending`; `pending`, `approved` o `rejected`), `judge_comment` text, `received_at` timestamptz (default now()), `reviewed_at` timestamptz.
 
@@ -249,7 +251,7 @@ Vegeu secció 7.
 
 ### 4.16. Rellotge compartit al servidor (confirmat)
 
-- Fitxer `supabase/functions/_shared/game-clock.ts`: constant `BONUS_SECONDS = 180`, `getElapsedSeconds(game, nowMs)` (acumulat + temps des de l'última arrencada si la partida és `active`), `getTeamClock(game, team, approvedCount, nowMs)`, que retorna `gameStatus`, `finished`, `finishReason` i `remainingSeconds` (durada + 180 s per repte aprovat − temps transcorregut; si l'equip ha acabat, queda congelat a `finish_elapsed_seconds`; si no ha acabat, la partida no és `setup` i el temps és 0, es considera acabat per `timeout`), i `getGameResult` (4.17). No escriu res a la base de dades.
+- Fitxer `supabase/functions/_shared/game-clock.ts`: `getElapsedSeconds(game, nowMs)` (acumulat + temps des de l'última arrencada si la partida és `active`), `getApprovedBonusSeconds(challenges)` (suma de `bonus_seconds` dels reptes aprovats; 180 si una fila no en té), `getTeamClock(game, team, approvedBonusSeconds, nowMs)`, que retorna `gameStatus`, `finished`, `finishReason` i `remainingSeconds` (durada + temps dels reptes aprovats − temps transcorregut; si l'equip ha acabat, queda congelat a `finish_elapsed_seconds`; si no ha acabat, la partida no és `setup` i el temps és 0, es considera acabat per `timeout`), i `getGameResult` (4.17). No escriu res a la base de dades.
 - Les funcions que l'usen: `get-team-game`, `judge-list-submissions`, `submit-photo` i `review-submission`.
 - **Frontend (Fase 5, pas 5, confirmat):** la pantalla de l'equip i el panell del jutge mostren el temps, l'estat i el final a partir del servidor. Guarden `remainingSeconds` i el moment en què el navegador ha rebut la resposta, i compten enrere localment cada segon entre les consultes de 5 s (es fa servir l'hora de recepció i no `serverNow`, perquè el rellotge del dispositiu pot anar desajustat).
   - Equip: estats `teamClock`, `teamNow`, `teamFinished`; `TeamPlayerScreen` rep `timeText`, `running`, `gameStarted` i una prop nova `finished` (substitueix `team.finished`). Abans de la primera resposta, el temps es mostra `--:--`.
@@ -336,13 +338,10 @@ Sense extreure (continuen dins d'`App.tsx`): la barra de control (Iniciar/Pausar
 ## 8. Problemes coneguts
 
 - **Durada de les partides de prova:** el botó Reiniciar manté `duration_seconds`; per canviar-la (p. ex. 60 s per provar el final per temps) cal fer servir la consulta SQL de la secció 11. Atenció: si la taula `games` no es reinicia (estat `finished`), les pantalles continuen mostrant el resultat antic.
-- L'equip no veu el motiu d'un rebuig durant la partida (només el veu al resum final i el jutge).
-- Si l'enviament d'una foto falla (p. ex. partida en pausa), l'equip no veu cap missatge: només surt a la consola (`submit-photo:`).
 - El panell del jutge no té modal ni avís de qui ha guanyat (només l'estat FINALITZADA i el motiu de final de cada equip).
 - Els enllaços de les fotos caduquen als 60 minuts; com que les consultes són cada 5 s, es renoven sols mentre la pantalla és oberta.
 - L'aprovació del jutge té un petit retard (arrencada en fred de les funcions).
 - Fotos òrfenes al bucket de proves antigues (de files de `submissions` esborrades a mà): `judge-reset-game` les esborra en reiniciar cada partida. La consulta SQL de la secció 11 no esborra fitxers.
-- Les Edge Functions del jutge (`create-game`, `judge-list-submissions`, `judge-reset-game`, `judge-set-game-state`, `review-submission`) encara tenen els missatges d'error "Cal iniciar sessió com a jutge." i "Sessió de jutge no vàlida." (haurien de dir "monitor"). Només es veuen a la consola o si la sessió caduca enmig d'una revisió. Canviar-los quan s'hagi de tornar a publicar alguna d'aquestes funcions per un altre motiu.
 - A la capçalera del monitor hi ha "SJD com a mapa de joc." (es manté expressament).
 - El document de requisits preveu accés del jutge amb codi d'administrador; l'app fa servir correu i contrasenya (Supabase Auth). Decidit mantenir correu i contrasenya.
 - **Git (endreçat el 24/10/2026):** hi ha un `.gitignore` i Git ja no segueix `node_modules`, `dist`, `supabase/.temp`, `.env.local` ni `*.tsbuildinfo` (els fitxers continuen a l'ordinador). S'han esborrat els fitxers antics `src/App.js`, `src/main.js`, `src/App.backup.txt` i `error.txt` (recuperables des del primer commit). Els commits nous encara NO s'han pujat a GitHub. El primer commit, que ja és a GitHub, conté aquests fitxers a l'historial; `.env.local` només té la URL i la clau publishable (pública per disseny), no cap clau secreta. Pendent: comprovar si el repositori de GitHub és públic o privat.
@@ -361,8 +360,13 @@ Decisions de disseny: reptes triats per separat per a cada equip (amb botó per 
 2. FET: formulari "Nova partida" amb selecció dels reptes de cada equip (`CreateGameSection`).
 3. FET: `create-game` rep els reptes triats i en fa una còpia a `challenges` (4.4). Confirmat que editar o esborrar un repte de la biblioteca no altera les partides ja creades.
 
-### Fase 3 — Desar els enviaments i moderar-los amb dades reals: GAIRE BÉ FET
-Fet: enviaments a `submissions`, llista i revisió del jutge, aprovació de reptes al servidor, pantalla de l'equip sincronitzada, resum de l'equip amb dades del servidor. Pendent: que l'equip vegi el motiu del rebuig durant la partida, i que l'historial del jutge usi dades del servidor.
+### Fase 3 — Desar els enviaments i moderar-los amb dades reals: FETA
+Fet: enviaments a `submissions`, llista i revisió del jutge (fa d'historial), aprovació de reptes al servidor, pantalla de l'equip sincronitzada, resum de l'equip amb dades del servidor.
+
+Avisos a l'equip (confirmat): sota cada repte no aprovat surt "Foto rebutjada: motiu" si l'últim enviament s'ha rebutjat; en enviar una foto surten els missatges "Enviant la fotografia...", "Fotografia enviada! Espera que el monitor la revisi." o l'error del servidor (estat `teamUploadStatus` a `App.tsx`; classes CSS `rejection-note` i `upload-status-*`). Mentre la foto puja, els controls queden bloquejats, i en acabar es refresca la pantalla de l'equip.
+
+### Temps configurables: FET (confirmat el 24/10/2026)
+Decisions: el temps de cada repte es decideix a la biblioteca (buit = per defecte); en crear la partida es tria la durada (20 min per defecte) i el temps per defecte dels reptes (3 min per defecte); minuts sencers. Columnes noves `challenge_library.bonus_seconds` i `challenges.bonus_seconds` (4.8), afegides amb SQL. Funcions modificades i publicades: `create-game`, `get-team-game`, `judge-list-submissions` (retorna també `game.durationSeconds` i `bonusSeconds` per repte), `submit-photo`, `review-submission`; a més, totes les funcions del jutge diuen ara "monitor" als missatges d'error. Frontend: camp de minuts a la biblioteca, camps de durada i temps per defecte a "Nova partida", "(+X min)" a cada repte (equip, targetes del panell, biblioteca i formulari), i la capçalera del panell mostra la durada real (`formatBonus` a `utils.ts`; `Challenge.bonusSeconds` a `types.ts`).
 
 ### Fase 4 — Emmagatzematge permanent de fotografies: FET
 Bucket privat, pujada per Edge Function i enllaços temporals. Pendent de decidir: compressió abans de pujar, límit de mida i tipus de fitxer al bucket (vegeu 4.11).
@@ -371,7 +375,7 @@ Bucket privat, pujada per Edge Function i enllaços temporals. Pendent de decidi
 
 Disseny acordat:
 - Un sol rellotge per partida al servidor. Temps transcorregut = `elapsed_seconds` + (ara − `clock_started_at`, només si l'estat és `active`).
-- Temps restant d'un equip = `duration_seconds` + 180 s per cada repte aprovat − temps transcorregut. El bonus es calcula, no es guarda.
+- Temps restant d'un equip = `duration_seconds` + suma dels `bonus_seconds` dels reptes aprovats − temps transcorregut. El total es calcula, no es guarda.
 - Estats de `games.status`: `setup`, `active`, `paused`, `finished` (no existeix `running`).
 - Regles: el primer equip que completa tota la seva llista guanya i la partida s'acaba per a tothom; un equip sense temps acaba per temps esgotat i no se li pot aprovar cap foto; si els dos equips es queden sense temps, guanya qui té més reptes aprovats i si empaten és empat.
 - Quan un equip completa la llista: desar `teams.finished_at`, `finish_reason = 'completed'` i `finish_elapsed_seconds`, i passar la partida a `finished`.
@@ -402,7 +406,7 @@ Provar jutge i dos equips amb dispositius diferents de debò (ara ja és possibl
 
 Estàs al xat de VS Code amb accés al repositori: llegeix tu mateix `src/App.tsx` i la resta de fitxers abans de proposar canvis.
 
-**Següent pas:** les Fases 2 i 5 estan acabades. Abans de publicar (Fase 7), fer les millores locals pendents (vegeu secció 8): que l'equip vegi el motiu d'un rebuig i els errors d'enviament, avís de resultat al panell del monitor, límits del bucket (mida i tipus) i, potser, compressió de les fotos abans de pujar-les. Quan es publiquin Edge Functions per aquestes millores, canviar també els missatges "jutge" → "monitor".
+**Següent pas:** abans de publicar (Fase 7), triar les millores locals que queden: avís de resultat al panell del monitor, fotos més lleugeres (compressió abans de pujar-les), límits del bucket (mida i tipus). Després, la Fase 7.
 
 ---
 

@@ -1,3 +1,8 @@
+// Temps que afegeix un repte, p. ex. "+3 min".
+export function formatBonus(seconds: number) {
+  return `+${Math.round(seconds / 60)} min`;
+}
+
 export function formatTime(seconds: number) {
   const safeSeconds = Math.max(0, Math.ceil(seconds));
   const minutes = Math.floor(safeSeconds / 60);

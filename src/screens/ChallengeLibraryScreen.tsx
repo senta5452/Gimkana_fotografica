@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { supabase } from "../supabase";
+import { formatBonus } from "../utils";
 
 export type LibraryChallenge = {
   id: string;
   title: string;
   description: string | null;
+  // Temps propi del repte; null = el temps per defecte de la partida.
+  bonus_seconds: number | null;
 };
 
 type ChallengeLibraryScreenProps = {
@@ -14,6 +17,7 @@ type ChallengeLibraryScreenProps = {
 
 const TITLE_MAX = 120;
 const DESCRIPTION_MAX = 500;
+const BONUS_MAX_MINUTES = 60;
 
 export default function ChallengeLibraryScreen({
   onBack,
@@ -26,14 +30,19 @@ export default function ChallengeLibraryScreen({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [bonusMinutes, setBonusMinutes] = useState(""); // buit = per defecte
   const [saving, setSaving] = useState(false);
+
+  const bonusValid =
+    bonusMinutes === "" ||
+    (/^\d+$/.test(bonusMinutes) && Number(bonusMinutes) <= BONUS_MAX_MINUTES);
 
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   async function loadChallenges() {
     const { data, error } = await supabase
       .from("challenge_library")
-      .select("id, title, description")
+      .select("id, title, description, bonus_seconds")
       .order("title");
 
     setLoading(false);
@@ -55,6 +64,7 @@ export default function ChallengeLibraryScreen({
     setEditingId(null);
     setTitle("");
     setDescription("");
+    setBonusMinutes("");
   }
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
@@ -63,7 +73,7 @@ export default function ChallengeLibraryScreen({
     const cleanTitle = title.trim();
     const cleanDescription = description.trim();
 
-    if (!cleanTitle) return;
+    if (!cleanTitle || !bonusValid) return;
 
     setSaving(true);
     setErrorMessage("");
@@ -71,6 +81,7 @@ export default function ChallengeLibraryScreen({
     const values = {
       title: cleanTitle,
       description: cleanDescription || null,
+      bonus_seconds: bonusMinutes === "" ? null : Number(bonusMinutes) * 60,
     };
 
     const { error } = editingId
@@ -116,6 +127,11 @@ export default function ChallengeLibraryScreen({
     setEditingId(challenge.id);
     setTitle(challenge.title);
     setDescription(challenge.description ?? "");
+    setBonusMinutes(
+      challenge.bonus_seconds === null
+        ? ""
+        : String(Math.round(challenge.bonus_seconds / 60))
+    );
   }
 
   return (
@@ -159,11 +175,36 @@ export default function ChallengeLibraryScreen({
           style={{ display: "block", width: "100%", marginBottom: 12 }}
         />
 
+        <label htmlFor="library-bonus">
+          Temps que afegeix en aprovar-lo (minuts)
+        </label>
+        <input
+          id="library-bonus"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={BONUS_MAX_MINUTES}
+          step={1}
+          value={bonusMinutes}
+          onChange={(event) => setBonusMinutes(event.target.value)}
+          placeholder="Per defecte"
+          style={{ display: "block", width: "100%", marginBottom: 4 }}
+        />
+        <p className="muted" style={{ marginTop: 0 }}>
+          Deixa-ho buit per fer servir el temps per defecte de cada partida
+          (3 min si no el canvies). Màxim {BONUS_MAX_MINUTES} min.
+        </p>
+        {!bonusValid && (
+          <p role="alert">
+            Escriu un nombre sencer de minuts entre 0 i {BONUS_MAX_MINUTES}.
+          </p>
+        )}
+
         <div className="review-actions">
           <button
             type="submit"
             className="primary-button"
-            disabled={saving || !title.trim()}
+            disabled={saving || !title.trim() || !bonusValid}
             style={{ marginTop: 0 }}
           >
             {editingId ? <Pencil size={16} /> : <Plus size={16} />}
@@ -204,7 +245,14 @@ export default function ChallengeLibraryScreen({
               <span className="challenge-check">•</span>
 
               <span style={{ flex: 1 }}>
-                <strong>{challenge.title}</strong>
+                <strong>{challenge.title}</strong>{" "}
+                <span className="muted">
+                  (
+                  {challenge.bonus_seconds === null
+                    ? "temps per defecte"
+                    : formatBonus(challenge.bonus_seconds)}
+                  )
+                </span>
                 {challenge.description && (
                   <>
                     <br />

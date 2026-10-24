@@ -1,6 +1,6 @@
 import { Camera, Check } from "lucide-react";
 import type { Team } from "../types";
-import { formatTime } from "../utils";
+import { formatBonus, formatTime } from "../utils";
 
 type JudgeTeamGridProps = {
   teams: Team[];
@@ -79,6 +79,12 @@ export default function JudgeTeamGrid({
                   </span>
                   <span className={challenge.approved ? "done-text" : ""}>
                     {challenge.title}
+                    {challenge.bonusSeconds != null && (
+                      <span className="muted">
+                        {" "}
+                        ({formatBonus(challenge.bonusSeconds)})
+                      </span>
+                    )}
                   </span>
                 </div>
               ))}

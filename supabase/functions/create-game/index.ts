@@ -32,6 +32,19 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_CHALLENGES_PER_TEAM = 50;
 
+// Minuts sencers dins d'un interval; si no s'envia, el valor per defecte.
+function parseMinutes(
+  value: unknown,
+  min: number,
+  max: number,
+  fallback: number,
+) {
+  if (value === undefined) return fallback;
+  if (typeof value !== "number" || !Number.isInteger(value)) return null;
+  if (value < min || value > max) return null;
+  return value;
+}
+
 // Llista d'identificadors de reptes de la biblioteca: entre 1 i 50, sense
 // repetits. Retorna null si no és vàlida.
 function parseChallengeIds(value: unknown) {
@@ -107,7 +120,7 @@ Deno.serve(async (req) => {
     const authorization = req.headers.get("Authorization");
 
     if (!authorization?.startsWith("Bearer ")) {
-      return response({ error: "Cal iniciar sessió com a jutge." }, 401);
+      return response({ error: "Cal iniciar sessió com a monitor." }, 401);
     }
 
     const accessToken = authorization.slice("Bearer ".length);
@@ -139,7 +152,7 @@ Deno.serve(async (req) => {
       await authClient.auth.getUser(accessToken);
 
     if (authError || !userData.user) {
-      return response({ error: "Sessió de jutge no vàlida." }, 401);
+      return response({ error: "Sessió de monitor no vàlida." }, 401);
     }
 
     const admin = createClient(url, secretKey, {
@@ -149,7 +162,13 @@ Deno.serve(async (req) => {
       },
     });
 
-    let body: { name?: unknown; teamA?: unknown; teamB?: unknown };
+    let body: {
+      name?: unknown;
+      teamA?: unknown;
+      teamB?: unknown;
+      durationMinutes?: unknown;
+      defaultBonusMinutes?: unknown;
+    };
 
     try {
       body = await req.json();
@@ -162,6 +181,23 @@ Deno.serve(async (req) => {
 
     if (!name || name.length > 100) {
       return response({ error: "El nom ha de tenir entre 1 i 100 caràcters." }, 400);
+    }
+
+    const durationMinutes = parseMinutes(body.durationMinutes, 1, 180, 20);
+
+    if (durationMinutes === null) {
+      return response({
+        error: "La durada ha de ser un nombre sencer de minuts entre 1 i 180.",
+      }, 400);
+    }
+
+    const defaultBonusMinutes = parseMinutes(body.defaultBonusMinutes, 0, 60, 3);
+
+    if (defaultBonusMinutes === null) {
+      return response({
+        error:
+          "El temps per defecte dels reptes ha de ser un nombre sencer de minuts entre 0 i 60.",
+      }, 400);
     }
 
     const teamAIds = parseChallengeIds(body.teamA);
@@ -179,7 +215,7 @@ Deno.serve(async (req) => {
 
     const { data: libraryRows, error: libraryError } = await admin
       .from("challenge_library")
-      .select("id, title, description")
+      .select("id, title, description, bonus_seconds")
       .eq("judge_id", userData.user.id)
       .in("id", allIds);
 
@@ -210,7 +246,7 @@ Deno.serve(async (req) => {
           name,
           game_code: gameCode,
           status: "setup",
-          duration_seconds: 1200,
+          duration_seconds: durationMinutes * 60,
         })
         .select("id, game_code")
         .single();
@@ -275,6 +311,9 @@ Deno.serve(async (req) => {
         team_id: teamIdByKey.get(key),
         title: libraryById.get(id)!.title,
         description: libraryById.get(id)!.description,
+        // Temps propi del repte o, si no en té, el per defecte de la partida
+        bonus_seconds:
+          libraryById.get(id)!.bonus_seconds ?? defaultBonusMinutes * 60,
         position: index + 1,
         approved: false,
       }))

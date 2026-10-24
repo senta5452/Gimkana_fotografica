@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     const authorization = req.headers.get("Authorization");
 
     if (!authorization?.startsWith("Bearer ")) {
-      return response({ error: "Cal iniciar sessió com a jutge." }, 401);
+      return response({ error: "Cal iniciar sessió com a monitor." }, 401);
     }
 
     const accessToken = authorization.slice("Bearer ".length);
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
       await authClient.auth.getUser(accessToken);
 
     if (authError || !userData.user) {
-      return response({ error: "Sessió de jutge no vàlida." }, 401);
+      return response({ error: "Sessió de monitor no vàlida." }, 401);
     }
 
     const admin = createClient(url, secretKey, {

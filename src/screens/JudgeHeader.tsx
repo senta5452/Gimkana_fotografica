@@ -1,6 +1,7 @@
 import { Clock3, Flag, LogOut } from "lucide-react";
 
 type JudgeHeaderProps = {
+  durationSeconds: number | null;
   running: boolean;
   gameStarted: boolean;
   allTeamsFinished: boolean;
@@ -8,6 +9,7 @@ type JudgeHeaderProps = {
 };
 
 export default function JudgeHeader({
+  durationSeconds,
   running,
   gameStarted,
   allTeamsFinished,
@@ -51,7 +53,10 @@ export default function JudgeHeader({
         </div>
         <div className="rule-chip">
           <Clock3 size={16} />
-          20 min inicials · +3 min per foto aprovada
+          {durationSeconds !== null
+            ? `${Math.round(durationSeconds / 60)} min inicials · `
+            : ""}
+          cada repte aprovat suma el seu temps
         </div>
       </section>
     </>

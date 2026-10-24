@@ -1,4 +1,7 @@
-import { getTeamClock } from "../_shared/game-clock.ts";
+import {
+  getApprovedBonusSeconds,
+  getTeamClock,
+} from "../_shared/game-clock.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -144,7 +147,7 @@ Deno.serve(async (req) => {
     }
 
     const approvedResponse = await fetch(
-      `${supabaseUrl}/rest/v1/challenges?team_id=eq.${team.id}&approved=eq.true&select=id`,
+      `${supabaseUrl}/rest/v1/challenges?team_id=eq.${team.id}&approved=eq.true&select=approved,bonus_seconds`,
       { headers },
     );
 
@@ -152,8 +155,12 @@ Deno.serve(async (req) => {
       throw new Error("No s'han pogut consultar els reptes aprovats.");
     }
 
-    const approvedCount = (await approvedResponse.json()).length;
-    const clock = getTeamClock(game, team, approvedCount, Date.now());
+    const clock = getTeamClock(
+      game,
+      team,
+      getApprovedBonusSeconds(await approvedResponse.json()),
+      Date.now(),
+    );
 
     if (clock.finished) {
       return jsonResponse(

@@ -1,5 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { getTeamClock } from "../_shared/game-clock.ts";
+import {
+  getApprovedBonusSeconds,
+  getTeamClock,
+} from "../_shared/game-clock.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,7 +36,7 @@ Deno.serve(async (req) => {
     const authorization = req.headers.get("Authorization");
 
     if (!authorization?.startsWith("Bearer ")) {
-      return response({ error: "Cal iniciar sessió com a jutge." }, 401);
+      return response({ error: "Cal iniciar sessió com a monitor." }, 401);
     }
 
     const accessToken = authorization.slice("Bearer ".length);
@@ -62,7 +65,7 @@ Deno.serve(async (req) => {
       await authClient.auth.getUser(accessToken);
 
     if (authError || !userData.user) {
-      return response({ error: "Sessió de jutge no vàlida." }, 401);
+      return response({ error: "Sessió de monitor no vàlida." }, 401);
     }
 
     const admin = createClient(url, secretKey, {
@@ -123,7 +126,7 @@ Deno.serve(async (req) => {
     // 3. Reptes dels equips
     const { data: challenges, error: challengesError } = await admin
       .from("challenges")
-      .select("id, team_id, title, approved, position")
+      .select("id, team_id, title, approved, position, bonus_seconds")
       .in("team_id", teamIds)
       .order("position");
 
@@ -174,6 +177,7 @@ Deno.serve(async (req) => {
     return response({
       game: {
         status: game.status,
+        durationSeconds: game.duration_seconds,
         serverNow: new Date(nowMs).toISOString(),
       },
       teams: (teams ?? []).map((team) => {
@@ -181,19 +185,21 @@ Deno.serve(async (req) => {
           (challenge) => challenge.team_id === team.id,
         );
 
-        const approvedCount = teamChallenges.filter(
-          (challenge) => challenge.approved,
-        ).length;
-
         return {
           id: team.id,
           key: team.team_key,
           name: team.name,
-          clock: getTeamClock(game, team, approvedCount, nowMs),
+          clock: getTeamClock(
+            game,
+            team,
+            getApprovedBonusSeconds(teamChallenges),
+            nowMs,
+          ),
           challenges: teamChallenges.map((challenge) => ({
             id: challenge.id,
             title: challenge.title,
             approved: challenge.approved,
+            bonusSeconds: challenge.bonus_seconds,
           })),
         };
       }),

@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase";
 import type { LibraryChallenge } from "./ChallengeLibraryScreen";
+import { formatBonus } from "../utils";
+
+// Text d'un camp de minuts sencers dins d'un interval.
+function isValidMinutes(value: string, min: number, max: number) {
+  return /^\d+$/.test(value) && Number(value) >= min && Number(value) <= max;
+}
 
 type CreatedGame = {
   gameId: string;
@@ -12,7 +18,12 @@ type CreatedGame = {
 type CreateGameSectionProps = {
   gameName: string;
   onGameNameChange: (value: string) => void;
-  onCreateGame: (teamA: string[], teamB: string[]) => void;
+  onCreateGame: (
+    teamA: string[],
+    teamB: string[],
+    durationMinutes: number,
+    defaultBonusMinutes: number
+  ) => void;
   onOpenLibrary: () => void;
   creating: boolean;
   error: string;
@@ -32,12 +43,17 @@ export default function CreateGameSection({
   const [libraryError, setLibraryError] = useState("");
   const [selectedA, setSelectedA] = useState<string[]>([]);
   const [selectedB, setSelectedB] = useState<string[]>([]);
+  const [durationMinutes, setDurationMinutes] = useState("20");
+  const [defaultBonusMinutes, setDefaultBonusMinutes] = useState("3");
+
+  const durationValid = isValidMinutes(durationMinutes, 1, 180);
+  const defaultBonusValid = isValidMinutes(defaultBonusMinutes, 0, 60);
 
   useEffect(() => {
     async function loadLibrary() {
       const { data, error } = await supabase
         .from("challenge_library")
-        .select("id, title, description")
+        .select("id, title, description, bonus_seconds")
         .order("title");
 
       if (error) {
@@ -111,7 +127,18 @@ export default function CreateGameSection({
               checked={selected.includes(challenge.id)}
               onChange={() => toggle(challenge.id, setSelected)}
             />
-            <span>{challenge.title}</span>
+            <span>
+              {challenge.title}{" "}
+              <span className="muted">
+                (
+                {challenge.bonus_seconds === null
+                  ? defaultBonusValid
+                    ? `${formatBonus(Number(defaultBonusMinutes) * 60)}, per defecte`
+                    : "per defecte"
+                  : formatBonus(challenge.bonus_seconds)}
+                )
+              </span>
+            </span>
           </label>
         ))}
       </fieldset>
@@ -119,7 +146,11 @@ export default function CreateGameSection({
   }
 
   const canCreate =
-    !creating && selectedA.length > 0 && selectedB.length > 0;
+    !creating &&
+    selectedA.length > 0 &&
+    selectedB.length > 0 &&
+    durationValid &&
+    defaultBonusValid;
 
   return (
     <section className="team-card" style={{ marginBottom: 24, padding: 24 }}>
@@ -134,6 +165,51 @@ export default function CreateGameSection({
         maxLength={100}
         style={{ display: "block", width: "100%", marginBottom: 12 }}
       />
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+        <div style={{ flex: "1 1 200px" }}>
+          <label htmlFor="game-duration">Durada de la partida (minuts)</label>
+          <input
+            id="game-duration"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={180}
+            step={1}
+            value={durationMinutes}
+            onChange={(event) => setDurationMinutes(event.target.value)}
+            style={{ display: "block", width: "100%", marginBottom: 4 }}
+          />
+          {!durationValid && (
+            <p role="alert">Entre 1 i 180 minuts sencers.</p>
+          )}
+        </div>
+
+        <div style={{ flex: "1 1 200px" }}>
+          <label htmlFor="game-default-bonus">
+            Temps per defecte dels reptes (minuts)
+          </label>
+          <input
+            id="game-default-bonus"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={60}
+            step={1}
+            value={defaultBonusMinutes}
+            onChange={(event) => setDefaultBonusMinutes(event.target.value)}
+            style={{ display: "block", width: "100%", marginBottom: 4 }}
+          />
+          {!defaultBonusValid && (
+            <p role="alert">Entre 0 i 60 minuts sencers.</p>
+          )}
+        </div>
+      </div>
+
+      <p className="muted">
+        El temps per defecte s'aplica als reptes de la biblioteca que no en
+        tenen un de propi.
+      </p>
 
       {libraryError && <p role="alert">{libraryError}</p>}
 
@@ -174,7 +250,14 @@ export default function CreateGameSection({
 
       <button
         className="primary-button"
-        onClick={() => onCreateGame(selectedA, selectedB)}
+        onClick={() =>
+          onCreateGame(
+            selectedA,
+            selectedB,
+            Number(durationMinutes),
+            Number(defaultBonusMinutes)
+          )
+        }
         disabled={!canCreate}
       >
         {creating ? "Creant..." : "Crear partida"}

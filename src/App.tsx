@@ -118,6 +118,7 @@ export default function App() {
   // tal com els retorna judge-list-submissions.
   const [judgeServer, setJudgeServer] = useState<{
     status: string;
+    durationSeconds: number | null;
     teams: {
       key: string;
       name: string;
@@ -192,6 +193,7 @@ export default function App() {
     setServerSubmissions(data.submissions ?? []);
     setJudgeServer({
       status: data.game?.status ?? "setup",
+      durationSeconds: data.game?.durationSeconds ?? null,
       teams: data.teams ?? [],
       receivedAt: Date.now(),
     });
@@ -335,10 +337,16 @@ export default function App() {
 
 
     const loadedChallenges = (data.challenges ?? []).map(
-      (challenge: { id: string; title: string; approved: boolean }) => ({
+      (challenge: {
+        id: string;
+        title: string;
+        approved: boolean;
+        bonus_seconds?: number | null;
+      }) => ({
         id: challenge.id,
         title: challenge.title,
         approved: challenge.approved,
+        bonusSeconds: challenge.bonus_seconds,
       })
     );
 
@@ -609,10 +617,12 @@ export default function App() {
             id: string;
             title: string;
             approved: boolean;
+            bonus_seconds?: number | null;
           }) => ({
             id: challenge.id,
             title: challenge.title,
             approved: challenge.approved,
+            bonusSeconds: challenge.bonus_seconds,
           })
         );
 
@@ -635,7 +645,12 @@ export default function App() {
       }
     }
 
-    async function handleCreateGame(teamA: string[], teamB: string[]) {
+    async function handleCreateGame(
+      teamA: string[],
+      teamB: string[],
+      durationMinutes: number,
+      defaultBonusMinutes: number
+    ) {
     if (!session?.access_token) {
       setGameError("Has d'iniciar sessió com a monitor.");
       return;
@@ -649,7 +664,13 @@ export default function App() {
       const { data, error } = await supabase.functions.invoke(
         "create-game",
         {
-          body: { name: gameName.trim() || "Nova gimcana", teamA, teamB },
+          body: {
+            name: gameName.trim() || "Nova gimcana",
+            teamA,
+            teamB,
+            durationMinutes,
+            defaultBonusMinutes,
+          },
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
@@ -927,6 +948,7 @@ export default function App() {
         </select>
       </section>
       <JudgeHeader
+        durationSeconds={judgeServer?.durationSeconds ?? null}
         running={judgeRunning}
         gameStarted={judgeStarted}
         allTeamsFinished={judgeFinished}
@@ -951,7 +973,7 @@ export default function App() {
           <ShieldCheck size={21} />
           <div>
             <strong>Control de partida</strong>
-            <span>Cada fotografia aprovada suma 3 minuts a l'equip.</span>
+            <span>Cada repte aprovat suma a l'equip el temps que té assignat.</span>
           </div>
         </div>
 

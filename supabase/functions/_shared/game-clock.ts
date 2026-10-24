@@ -1,4 +1,5 @@
-export const BONUS_SECONDS = 180;
+// Temps que afegeix un repte si la fila no en té (reptes antics).
+const DEFAULT_BONUS_SECONDS = 180;
 
 type GameClockRow = {
   status: string;
@@ -24,14 +25,27 @@ export function getElapsedSeconds(game: GameClockRow, nowMs: number) {
   return game.elapsed_seconds;
 }
 
+// Suma del temps que afegeixen els reptes aprovats d'un equip.
+export function getApprovedBonusSeconds(
+  challenges: { approved: boolean; bonus_seconds?: number | null }[],
+) {
+  return challenges
+    .filter((challenge) => challenge.approved)
+    .reduce(
+      (total, challenge) =>
+        total + (challenge.bonus_seconds ?? DEFAULT_BONUS_SECONDS),
+      0,
+    );
+}
+
 export function getTeamClock(
   game: GameClockRow,
   team: TeamClockRow,
-  approvedCount: number,
+  approvedBonusSeconds: number,
   nowMs: number,
 ) {
   const elapsed = getElapsedSeconds(game, nowMs);
-  const limit = game.duration_seconds + BONUS_SECONDS * approvedCount;
+  const limit = game.duration_seconds + approvedBonusSeconds;
 
   if (team.finished_at) {
     const finishedAt = team.finish_elapsed_seconds ?? elapsed;

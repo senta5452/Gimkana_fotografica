@@ -1,5 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { getElapsedSeconds, getTeamClock } from "../_shared/game-clock.ts";
+import {
+  getApprovedBonusSeconds,
+  getElapsedSeconds,
+  getTeamClock,
+} from "../_shared/game-clock.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,7 +36,7 @@ Deno.serve(async (req) => {
     const authorization = req.headers.get("Authorization");
 
     if (!authorization?.startsWith("Bearer ")) {
-      return response({ error: "Cal iniciar sessió com a jutge." }, 401);
+      return response({ error: "Cal iniciar sessió com a monitor." }, 401);
     }
 
     const accessToken = authorization.slice("Bearer ".length);
@@ -61,7 +65,7 @@ Deno.serve(async (req) => {
       await authClient.auth.getUser(accessToken);
 
     if (authError || !userData.user) {
-      return response({ error: "Sessió de jutge no vàlida." }, 401);
+      return response({ error: "Sessió de monitor no vàlida." }, 401);
     }
 
     const admin = createClient(url, secretKey, {
@@ -163,7 +167,7 @@ Deno.serve(async (req) => {
     // 2b. Reptes de l'equip i regles de final
     const { data: teamChallenges, error: teamChallengesError } = await admin
       .from("challenges")
-      .select("id, approved")
+      .select("id, approved, bonus_seconds")
       .eq("team_id", team.id);
 
     if (teamChallengesError) {
@@ -189,11 +193,12 @@ Deno.serve(async (req) => {
         return response({ error: "La partida ja ha acabat." }, 409);
       }
 
-      const approvedCount = (teamChallenges ?? []).filter(
-        (item) => item.approved,
-      ).length;
-
-      const clock = getTeamClock(game, team, approvedCount, nowMs);
+      const clock = getTeamClock(
+        game,
+        team,
+        getApprovedBonusSeconds(teamChallenges ?? []),
+        nowMs,
+      );
 
       if (clock.finished) {
         return response(

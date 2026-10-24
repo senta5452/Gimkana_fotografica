@@ -2,6 +2,7 @@ export type Challenge = {
   id: number | string;
   title: string;
   approved: boolean;
+  bonusSeconds?: number | null;
 };
 
 export type Team = {
