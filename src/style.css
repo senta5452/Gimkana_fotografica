@@ -1069,3 +1069,107 @@ button:disabled {
   border-color: #f87171;
   color: #fca5a5;
 }
+
+/* ---------- Formularis amb el mateix aspecte a tota l'app ---------- */
+
+/* Camps d'escriptura: fons com els botons secundaris, cantonades rodones */
+input:where(:not([type="checkbox"], [type="radio"], [type="file"])),
+textarea {
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: #e9eef7;
+  background: #202e41;
+  font: inherit;
+  font-size: 13px;
+}
+
+/* Desplegables: com els de la pantalla de l'equip */
+select {
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: #e9eef7;
+  background: #101a28;
+  font: inherit;
+  font-size: 13px;
+}
+
+select option {
+  color: #e9eef7;
+  background: #101a28;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+label {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: #dce5f0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  flex: none;
+  accent-color: var(--green);
+}
+
+/* Subseccions dins d'un requadre (reptes de cada equip, accés, edició) */
+.sub-panel {
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgb(16 24 39 / 45%);
+}
+
+.sub-panel legend {
+  padding: 0 6px;
+}
+
+/* Opció amb casella, com una fila de la llista de reptes */
+.choice-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 0 6px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #202e41;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.choice-row:has(input:checked) {
+  border-color: var(--green);
+}
+
+.pin-value {
+  color: var(--green);
+  font-family: "Space Grotesk", monospace;
+  letter-spacing: 0.08em;
+}

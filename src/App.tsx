@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   BookOpen,
-  LogOut,
   Pause,
   Play,
   RotateCcw,
@@ -29,6 +28,8 @@ import JudgeTeamGrid from "./screens/JudgeTeamGrid";
 import ServerModerationSection from "./screens/ServerModerationSection";
 import ChallengeLibraryScreen from "./screens/ChallengeLibraryScreen";
 import GameListSection from "./screens/GameListSection";
+import type { JudgeGame } from "./screens/GameListSection";
+import TeamAccessSection from "./screens/TeamAccessSection";
 import TeamNameScreen from "./screens/TeamNameScreen";
 
 
@@ -72,15 +73,7 @@ export default function App() {
   } | null>(null);
   const [joinedGameName, setJoinedGameName] = useState("");
 
-    const [judgeGames, setJudgeGames] = useState<
-    {
-      id: string;
-      name: string;
-      game_code: string;
-      status: string;
-      created_at?: string;
-    }[]
-  >([]);
+  const [judgeGames, setJudgeGames] = useState<JudgeGame[]>([]);
   const [selectedGameId, setSelectedGameId] = useState("");
 
   const [serverSubmissions, setServerSubmissions] = useState<
@@ -152,26 +145,26 @@ export default function App() {
   } | null>(null);
   const [judgeNow, setJudgeNow] = useState(Date.now());
 
+  async function loadJudgeGames() {
+    const { data, error } = await supabase.from("games").select("*");
+
+    if (error) {
+      console.error("No s'han pogut carregar les partides:", error);
+      return;
+    }
+
+    const games = [...(data ?? [])].sort((a, b) =>
+      (b.created_at ?? "").localeCompare(a.created_at ?? "")
+    );
+
+    setJudgeGames(games);
+  }
+
   useEffect(() => {
     if (!session) {
       setJudgeGames([]);
       setSelectedGameId("");
       return;
-    }
-
-    async function loadJudgeGames() {
-      const { data, error } = await supabase.from("games").select("*");
-
-      if (error) {
-        console.error("No s'han pogut carregar les partides:", error);
-        return;
-      }
-
-      const games = [...(data ?? [])].sort((a, b) =>
-        (b.created_at ?? "").localeCompare(a.created_at ?? "")
-      );
-
-      setJudgeGames(games);
     }
 
     // Es torna a carregar en tornar a l'inici del monitor (estats al dia) i
@@ -608,12 +601,6 @@ export default function App() {
     }
   }
 
-    async function handleJudgeLogout() {
-      await signOutMonitor();
-      setCurrentView("home");
-      setEntryScreen("home");
-    }
-
         async function handleTeamLogin(
       event: React.FormEvent<HTMLFormElement>
     ) {
@@ -1035,20 +1022,11 @@ export default function App() {
 
     {currentView === "judge" && session && (
       <>
-      <section className="team-card" style={{ marginBottom: 24, padding: 24 }}>
-        <p className="eyebrow">GIMCANA FOTOGRÀFICA</p>
-        <h1>Inici del monitor</h1>
-        <p className="muted">
-          Tria una partida per supervisar-la, crea'n una de nova o gestiona la
-          biblioteca de reptes.
-        </p>
-        <button className="secondary-button" onClick={handleJudgeLogout}>
-          <LogOut size={16} />
-          Tancar sessió
-        </button>
-      </section>
-
-      <GameListSection games={judgeGames} onOpenGame={openJudgeGame} />
+      <GameListSection
+        games={judgeGames}
+        onOpenGame={openJudgeGame}
+        onGamesChanged={loadJudgeGames}
+      />
 
       <CreateGameSection
         gameName={gameName}
@@ -1090,7 +1068,10 @@ export default function App() {
         <p className="eyebrow" style={{ marginTop: 20 }}>PARTIDA</p>
         <h2>{selectedGame?.name ?? "Partida"}</h2>
         {selectedGame && (
-          <p className="muted">Codi de partida: {selectedGame.game_code}</p>
+          <TeamAccessSection
+            gameId={selectedGame.id}
+            gameCode={selectedGame.game_code}
+          />
         )}
       </section>
       <JudgeHeader
@@ -1098,7 +1079,6 @@ export default function App() {
         running={judgeRunning}
         gameStarted={judgeStarted}
         allTeamsFinished={judgeFinished}
-        onLogout={handleJudgeLogout}
       />
 
       {judgeServer?.result?.over && (

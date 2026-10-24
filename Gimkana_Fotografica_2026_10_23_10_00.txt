@@ -17,7 +17,7 @@ Estic desenvolupant una aplicació web anomenada **Gimcana Fotogràfica**. Soc p
 - No demanis contrasenyes, tokens ni claus secretes.
 - Quan hagis de crear una Edge Function nova, segueix el mateix patró de les que ja funcionen (vegeu secció 5).
 
-**Punt exacte per reprendre:** les Fases 2 i 5, els avisos a l'equip i els temps configurables estan acabats i confirmats. Decisió: abans de publicar (Fase 7), fer tot el que es pugui en local, per no haver de publicar més vegades del necessari. Següent: triar les millores locals que queden (secció 10). Git està endreçat i els commits es pugen a GitHub quan el canvi està provat.
+**Punt exacte per reprendre:** les Fases 2, 3, 4 i 5 i totes les millores locals demanades fins ara estan acabades i confirmades (vegeu secció 12). Decisió: abans de publicar (Fase 7), fer tot el que es pugui en local, per no haver de publicar més vegades del necessari. Següent: els canvis nous que demani l'usuari, o la Fase 7. Git està endreçat i els commits es pugen a GitHub quan el canvi està provat.
 
 **Terminologia:** a la interfície, el rol de "jutge" es diu **monitor** (decisió del 24/10/2026). Tots els textos visibles del frontend diuen "monitor". Al codi (noms de funcions `judge-*`, components `Judge*`, comentaris) i en aquest document es continua dient "jutge". Última actualització del document: 24/10/2026.
 
@@ -44,12 +44,13 @@ Fitxers principals:
 - `src/main.tsx`
 - `src/style.css` (els estils; `main.tsx` importa `./style.css`)
 - `src/supabase.ts`
-- `src/types.ts` (tipus `Challenge`, `Team`, `Submission`, `ServerSubmission`)
-- `src/utils.ts` (constants, `createTeam`, `formatTime`)
+- `src/types.ts` (tipus `Challenge`, `Team`, `GameResult`, `ServerSubmission`)
+- `src/utils.ts` (`formatTime`, `formatBonus`)
+- `src/compressPhoto.ts` (redueix les fotos abans de pujar-les)
 - `src/screens/` (pantalles i components extrets d'`App.tsx`, vegeu secció 7)
 - `Gimkana_Fotografica_decisions.txt` (document de requisits del projecte)
 - `supabase/config.toml`
-- `supabase/functions/` (una carpeta per funció, més `_shared/game-clock.ts` amb el càlcul del rellotge i del resultat compartit)
+- `supabase/functions/` (una carpeta per funció, més `_shared/game-clock.ts` amb el càlcul del rellotge i del resultat compartit i `_shared/pin.ts` amb la generació i el hash dels PIN)
 
 Per executar ordres de npm a PowerShell, faig servir habitualment `npm.cmd` (i `npx.cmd` si cal) perquè PowerShell pot bloquejar l'execució de scripts.
 
@@ -130,6 +131,7 @@ No cal tornar a crear el client Supabase ni demanar-me que torni a configurar aq
 - L'aplicació importa el client Supabase des de `src/supabase.ts`.
 - El frontend utilitza `Session` de `@supabase/supabase-js` per gestionar l'estat d'autenticació.
 - Les funcions del costat del jutge reben el token d'accés de la sessió automàticament amb `supabase.functions.invoke`.
+- Sessió per pestanya (confirmat): `src/supabase.ts` guarda la sessió a `sessionStorage`. Una pestanya nova demana credencials; "← Tornar a l'inici" tanca la sessió (`signOutMonitor`, `signOut({ scope: "local" })`); recarregar la pestanya la manté i torna a la mateixa pantalla (clau `monitorView` a `sessionStorage`). No hi ha cap botó "Tancar sessió".
 
 ### 4.4. Creació de partides
 
@@ -160,6 +162,7 @@ Ja s'ha comprovat que:
 - Retorna un token i les dades necessàries per continuar.
 - El frontend desa el token i les dades de l'equip a `sessionStorage` (claus `teamToken` i `teamKey`, entre d'altres).
 - Des del 24/10/2026 (confirmat), `join-game` permet entrar a una partida `finished` (abans la rebutjava): l'equip veu "Partida finalitzada", el resultat i el resum. Les fotos continuen bloquejades per `submit-photo`.
+- Nom de l'equip (confirmat): després d'entrar, si la partida és `setup`, surt la pantalla `TeamNameScreen` ("Com es diu el vostre equip?", màx. 30 caràcters, amb el nom actual escrit). Es desa amb la funció `set-team-name`, que només ho permet en `setup`. Un cop començada la partida, aquest pas no surt.
 - Si l'entrada falla, `handleTeamLogin` mostra el missatge en català que retorna el servidor (p. ex. "Codi, equip o PIN incorrecte."), no el genèric "Edge Function returned a non-2xx status code".
 
 La funció `handleTeamLogin(event)` crida `join-game` i després `get-team-game`.
@@ -218,14 +221,16 @@ No s'han de concedir permisos amplis al client per resoldre errors de manera rà
 
 ### 4.11. Emmagatzematge de fotografies (confirmat)
 
-- Bucket de Supabase Storage `submission-photos`, creat amb 0 polítiques (només hi accedeixen les Edge Functions). Comprovar que és privat i, si es vol, el límit de mida (previst 10 MB) i els tipus d'imatge (JPEG, PNG, WebP); no s'ha confirmat que aquests dos paràmetres s'hagin posat.
+- Bucket de Supabase Storage `submission-photos`, creat amb 0 polítiques (només hi accedeixen les Edge Functions). Configurat amb SQL i confirmat: privat, límit de 10 MB i només `image/jpeg`, `image/png` i `image/webp`.
+- Les fotos es redueixen al navegador abans de pujar-les (`src/compressPhoto.ts`: costat llarg de 1600 px, JPEG qualitat 0,82, respecta l'orientació; si no es pot, s'envia l'original). Confirmat.
 - Edge Function `submit-photo`: rep `token`, `challengeId` i `photo` (formulari multipart), valida la sessió de l'equip, que el repte sigui seu i no estigui aprovat, que no tingui ja una foto pendent, i que el fitxer sigui JPEG/PNG/WebP de com a màxim 10 MB. Puja la foto a `submission-photos/<game_id>/<team_id>/<uuid>.<ext>` i crea la fila a `submissions`. Si falla la inserció, esborra la foto.
 - Frontend: `uploadPhotoToServer(challengeId, file)` a `App.tsx` es crida dins d'`onPhotoSelected`.
 - `submit-photo` comprova al servidor que la partida estigui `active` (si no, 409 "La partida no està en marxa.") i que l'equip no hagi acabat (per `getTeamClock`, 409 "El teu equip ja ha acabat la partida.").
 
 ### 4.12. Panell del jutge amb dades del servidor (confirmat)
 
-- Selector "Partida que supervises" (`judgeGames`, `selectedGameId` a `App.tsx`): llegeix les partides del jutge directament de `games`, ordenades per `created_at`; selecciona automàticament la partida recent creada.
+- Inici del monitor (vista `judge`, confirmat): "Les meves partides" (`GameListSection`: obrir, editar el nom sempre i la durada només en `setup`, esborrar amb confirmació), "Nova partida" (`CreateGameSection`, amb el botó "Obrir aquesta partida") i la targeta de la biblioteca. Les partides es llegeixen directament de `games` (`loadJudgeGames`), ordenades per `created_at`; l'edició també és directa a `games` (política RLS d'update).
+- Panell d'una partida (vista `judgeGame`, `openJudgeGame`): nom, "Accés dels equips" (`TeamAccessSection`: codi de partida i botó "Generar un PIN nou" per equip), capçalera, avís de resultat, targetes, moderació i controls. Botó "← Les meves partides".
 - Edge Function `judge-list-submissions` (JWT del jutge, rep `gameId`): comprova que la partida és del jutge i retorna `game: { status, serverNow }`, equips amb reptes i `clock` (`gameStatus`, `finished`, `finishReason`, `remainingSeconds`), i enviaments amb enllaços temporals d'una hora a les fotos (el bucket és privat).
 - `loadServerSubmissions` a `App.tsx` la crida quan canvia la partida seleccionada i, des del 24/10/2026, **cada 5 s** mentre la vista és la del jutge (confirmat: les fotos noves apareixen soles). Desa els enviaments a `serverSubmissions` i l'estat i els rellotges a `judgeServer`.
 - Component `src/screens/ServerModerationSection.tsx` ("Fotos del servidor"): mostra les fotos (amb equip, repte, data, estat i motiu del rebuig) i els botons Aprovar i Rebutjar (el rebuig demana un motiu obligatori de fins a 500 caràcters). El text del motiu no s'esborra quan arriba una actualització.
@@ -263,7 +268,7 @@ Vegeu secció 7.
 - `get-team-game` retorna el bloc `result`. El modal de l'equip ("Heu guanyat!", "Empat!", "Partida finalitzada") surt de `teamResult` i no apareix a la pantalla de login.
 - `SummaryScreen` fa servir els enviaments del servidor (`teamSubmissions`, amb `photoUrl` quan la partida ha acabat), el títol del repte es busca per `challengeId`, i `teamWon`/`isDraw` surten de `teamResult`.
 - Confirmat: victòria per llista completada (modal i resum amb fotos als dos equips) i empat per temps esgotat amb una partida sense reptes. La victòria per punts (temps esgotat amb reptes aprovats diferents) encara no s'ha provat.
-- El panell del jutge no té modal de resultat (es podria afegir amb `getGameResult` a `judge-list-submissions`).
+- El panell del jutge mostra un avís de resultat (classe `result-banner`) a partir del `result` de `judge-list-submissions` (confirmat).
 
 ---
 
@@ -279,10 +284,14 @@ Les funcions utilitzen variables de servidor com `SUPABASE_URL`, `SUPABASE_SECRE
 - `submit-photo`: pujada d'una foto d'un equip (4.11); rebutja si la partida no és `active` o l'equip ha acabat.
 
 **Funcions del jutge (JWT de Supabase Auth, validat amb `auth.getUser`, i comprovant que la partida és del jutge per `judge_id`):**
-- `judge-list-submissions`: equips (amb `clock`), reptes, `game` (estat i `serverNow`) i enviaments amb enllaços temporals a les fotos.
+- `judge-list-submissions`: equips (amb `clock`), reptes (amb `bonusSeconds`), `game` (estat, `durationSeconds` i `serverNow`), `result` i enviaments amb enllaços temporals a les fotos.
 - `review-submission`: aprova o rebutja un enviament. No es pot aprovar si la partida ja és `finished` ni si l'equip ja ha acabat (per temps esgotat o per llista completada), ni un repte ja aprovat; en aprovar l'últim repte pendent d'un equip es desa `teams.finished_at`, `finish_reason = 'completed'` i `finish_elapsed_seconds`, i la partida passa a `finished` (`finished_at`, `elapsed_seconds` actualitzat, `clock_started_at` buit). Si falla algun pas, es desfà l'aprovació.
 - `judge-set-game-state`: inicia, pausa i reprèn la partida.
 - `judge-reset-game` (publicada i confirmada): rep `gameId`. Torna la partida a `setup` (`started_at`, `finished_at`, `clock_started_at` buits, `elapsed_seconds = 0`; manté `duration_seconds`), esborra els enviaments dels dos equips, desmarca tots els reptes, buida els camps de final dels equips i esborra les fotos de la partida del bucket (carpetes `<game_id>/<team_id>/`, també les fotos òrfenes de proves antigues). Primer posa la partida a `setup`, perquè no entrin fotos noves mentre es reinicia. Si falla l'esborrat de fotos, la partida queda reiniciada igualment i només es registra l'error. Les sessions dels equips no es tanquen. Retorna `removedPhotos`.
+- `judge-regenerate-pin` (confirmada): rep `gameId` i `teamKey`; genera un PIN nou (amb `_shared/pin.ts`), en desa el hash i el retorna. L'antic deixa de servir; les sessions obertes continuen.
+- `judge-delete-game` (confirmada): rep `gameId`; esborra enviaments, reptes, sessions, equips i la partida, i després les fotos del bucket.
+
+**Funció d'equip nova:** `set-team-name` (confirmada): rep `token` i `name` (1-30 caràcters); només en `setup`.
 
 Patró d'autenticació dels equips: token personalitzat → hash SHA-256 → fila a `team_sessions` no revocada ni caducada → equip → partida. Patró del jutge: capçalera `Authorization: Bearer <token>` → `auth.getUser` amb la clau publishable → client amb clau secreta (`admin`) → comprovar `judge_id`. Les respostes d'error van en català i usen els mateixos CORS que la resta.
 
@@ -331,20 +340,21 @@ Fet i confirmat que funciona:
 14. `src/screens/ServerModerationSection.tsx` (secció de moderació: "Fotos dels equips").
 15. `src/screens/ChallengeLibraryScreen.tsx` (Fase 2: pantalla "Biblioteca de reptes", vista `library`; crear, editar i esborrar reptes de `challenge_library`; exporta el tipus `LibraryChallenge`). S'hi accedeix amb el botó "Obrir la biblioteca" del panell.
 
-Sense extreure (continuen dins d'`App.tsx`): la barra de control (Iniciar/Pausar/Reiniciar), el selector de partida i el modal de resultat.
+16. `src/screens/TeamNameScreen.tsx`, `src/screens/GameListSection.tsx` (exporta `JudgeGame`) i `src/screens/TeamAccessSection.tsx`.
+
+Sense extreure (continuen dins d'`App.tsx`): la barra de control (Iniciar/Pausar/Reiniciar), l'avís de resultat del panell i el modal de resultat de l'equip.
 
 ---
 
 ## 8. Problemes coneguts
 
 - **Durada de les partides de prova:** el botó Reiniciar manté `duration_seconds`; per canviar-la (p. ex. 60 s per provar el final per temps) cal fer servir la consulta SQL de la secció 11. Atenció: si la taula `games` no es reinicia (estat `finished`), les pantalles continuen mostrant el resultat antic.
-- El panell del jutge no té modal ni avís de qui ha guanyat (només l'estat FINALITZADA i el motiu de final de cada equip).
 - Els enllaços de les fotos caduquen als 60 minuts; com que les consultes són cada 5 s, es renoven sols mentre la pantalla és oberta.
 - L'aprovació del jutge té un petit retard (arrencada en fred de les funcions).
 - Fotos òrfenes al bucket de proves antigues (de files de `submissions` esborrades a mà): `judge-reset-game` les esborra en reiniciar cada partida. La consulta SQL de la secció 11 no esborra fitxers.
 - A la capçalera del monitor hi ha "SJD com a mapa de joc." (es manté expressament).
 - El document de requisits preveu accés del jutge amb codi d'administrador; l'app fa servir correu i contrasenya (Supabase Auth). Decidit mantenir correu i contrasenya.
-- **Git (endreçat el 24/10/2026):** hi ha un `.gitignore` i Git ja no segueix `node_modules`, `dist`, `supabase/.temp`, `.env.local` ni `*.tsbuildinfo` (els fitxers continuen a l'ordinador). S'han esborrat els fitxers antics `src/App.js`, `src/main.js`, `src/App.backup.txt` i `error.txt` (recuperables des del primer commit). Els commits nous encara NO s'han pujat a GitHub. El primer commit, que ja és a GitHub, conté aquests fitxers a l'historial; `.env.local` només té la URL i la clau publishable (pública per disseny), no cap clau secreta. Pendent: comprovar si el repositori de GitHub és públic o privat.
+- **Git (endreçat el 24/10/2026):** hi ha un `.gitignore` i Git ja no segueix `node_modules`, `dist`, `supabase/.temp`, `.env.local` ni `*.tsbuildinfo` (els fitxers continuen a l'ordinador). S'han esborrat els fitxers antics `src/App.js`, `src/main.js`, `src/App.backup.txt` i `error.txt` (recuperables des del primer commit). Els commits provats es pugen a GitHub (`git push origin main`). El primer commit, que ja és a GitHub, conté aquests fitxers a l'historial; `.env.local` només té la URL i la clau publishable (pública per disseny), no cap clau secreta. Pendent: comprovar si el repositori de GitHub és públic o privat.
 
 ---
 
@@ -369,7 +379,7 @@ Avisos a l'equip (confirmat): sota cada repte no aprovat surt "Foto rebutjada: m
 Decisions: el temps de cada repte es decideix a la biblioteca (buit = per defecte); en crear la partida es tria la durada (20 min per defecte) i el temps per defecte dels reptes (3 min per defecte); minuts sencers. Columnes noves `challenge_library.bonus_seconds` i `challenges.bonus_seconds` (4.8), afegides amb SQL. Funcions modificades i publicades: `create-game`, `get-team-game`, `judge-list-submissions` (retorna també `game.durationSeconds` i `bonusSeconds` per repte), `submit-photo`, `review-submission`; a més, totes les funcions del jutge diuen ara "monitor" als missatges d'error. Frontend: camp de minuts a la biblioteca, camps de durada i temps per defecte a "Nova partida", "(+X min)" a cada repte (equip, targetes del panell, biblioteca i formulari), i la capçalera del panell mostra la durada real (`formatBonus` a `utils.ts`; `Challenge.bonusSeconds` a `types.ts`).
 
 ### Fase 4 — Emmagatzematge permanent de fotografies: FET
-Bucket privat, pujada per Edge Function i enllaços temporals. Pendent de decidir: compressió abans de pujar, límit de mida i tipus de fitxer al bucket (vegeu 4.11).
+Bucket privat amb límits de mida i tipus, fotos reduïdes abans de pujar-les, pujada per Edge Function i enllaços temporals (vegeu 4.11).
 
 ### Fase 5 — Temporitzador i estat de la partida compartits: FETA (tots els passos confirmats)
 
@@ -406,7 +416,7 @@ Provar jutge i dos equips amb dispositius diferents de debò (ara ja és possibl
 
 Estàs al xat de VS Code amb accés al repositori: llegeix tu mateix `src/App.tsx` i la resta de fitxers abans de proposar canvis.
 
-**Següent pas:** abans de publicar (Fase 7), triar les millores locals que queden: avís de resultat al panell del monitor, fotos més lleugeres (compressió abans de pujar-les), límits del bucket (mida i tipus). Després, la Fase 7.
+**Següent pas:** fer els canvis nous que demani l'usuari (en local) i, després, la Fase 7 (publicar i provar amb mòbils reals).
 
 ---
 
@@ -450,3 +460,16 @@ begin
   where id = v_game;
 end $$;
 ```
+
+---
+
+## 12. Millores locals fetes el 24/10/2026 (totes confirmades)
+
+- Avisos a l'equip: motiu del rebuig i estat de l'enviament.
+- Temps configurables: durada de la partida i temps per repte.
+- Nom de l'equip triat en entrar (fins que comenci la partida).
+- Monitor en dues pantalles (inici del monitor i panell d'una partida) i sessió per pestanya.
+- Avís de resultat al panell del monitor.
+- Fotos reduïdes abans de pujar-les i límits del bucket.
+- Generar un PIN nou per equip; editar i esborrar partides.
+- Estètica cohesionada (`style.css`, al final): camps d'escriptura amb fons com els botons secundaris, desplegables com els de la pantalla de l'equip, classes `sub-panel` (subseccions), `choice-row` (opcions amb casella) i `pin-value`.

@@ -95,7 +95,7 @@ export default function CreateGameSection({
     setSelected: React.Dispatch<React.SetStateAction<string[]>>
   ) {
     return (
-      <fieldset style={{ flex: "1 1 260px", minWidth: 0 }}>
+      <fieldset className="sub-panel" style={{ flex: "1 1 260px", minWidth: 0 }}>
         <legend>
           <strong>Reptes de l'equip {teamKey}</strong> ({selected.length})
         </legend>
@@ -120,10 +120,7 @@ export default function CreateGameSection({
         </div>
 
         {library.map((challenge) => (
-          <label
-            key={challenge.id}
-            style={{ display: "flex", gap: 8, alignItems: "flex-start" }}
-          >
+          <label key={challenge.id} className="choice-row">
             <input
               type="checkbox"
               checked={selected.includes(challenge.id)}

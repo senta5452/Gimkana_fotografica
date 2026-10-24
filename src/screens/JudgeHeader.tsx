@@ -1,11 +1,10 @@
-import { Clock3, Flag, LogOut } from "lucide-react";
+import { Clock3, Flag } from "lucide-react";
 
 type JudgeHeaderProps = {
   durationSeconds: number | null;
   running: boolean;
   gameStarted: boolean;
   allTeamsFinished: boolean;
-  onLogout: () => void;
 };
 
 export default function JudgeHeader({
@@ -13,7 +12,6 @@ export default function JudgeHeader({
   running,
   gameStarted,
   allTeamsFinished,
-  onLogout,
 }: JudgeHeaderProps) {
   return (
     <>
@@ -37,10 +35,6 @@ export default function JudgeHeader({
                 ? "PAUSADA"
                 : "PREPARADA"}
         </div>
-        <button className="secondary-button" onClick={onLogout}>
-          <LogOut size={16} />
-          Tancar sessió
-        </button>
       </header>
 
       <section className="intro">
