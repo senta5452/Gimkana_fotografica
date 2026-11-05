@@ -1,6 +1,7 @@
 import { Camera, Check, Clock3, Image as ImageIcon, X } from "lucide-react";
 import type { Team } from "../types";
 import { formatBonus } from "../utils";
+import ChallengeDescription from "./ChallengeDescription";
 
 type TeamSubmission = {
   id: string;
@@ -108,6 +109,7 @@ export default function TeamPlayerScreen({
                     ({formatBonus(challenge.bonusSeconds)})
                   </span>
                 )}
+                <ChallengeDescription text={challenge.description} />
                 {rejection && (
                   <>
                     <br />

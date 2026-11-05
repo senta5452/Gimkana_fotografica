@@ -1180,3 +1180,106 @@ input[type="checkbox"] {
   font-family: "Space Grotesk", monospace;
   letter-spacing: 0.08em;
 }
+
+/* Descripció d'un repte en un desplegable */
+.challenge-description {
+  /* inline-block: el ratllat dels reptes aprovats no hi arriba */
+  display: inline-block;
+  width: 100%;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.challenge-description summary {
+  width: fit-content;
+  color: var(--green);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.challenge-description p {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--green);
+  border-radius: 0 8px 8px 0;
+  color: #c1d4d0;
+  background: rgb(16 24 39 / 45%);
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+/* ---------- Missatges entre el monitor i els equips ---------- */
+
+/* L'avís del monitor queda per sobre del modal de resultat */
+.message-alert-overlay {
+  z-index: 1100;
+}
+
+.message-alert-text {
+  font-size: 22px;
+  line-height: 1.35;
+  white-space: pre-line;
+}
+
+.messages-card {
+  margin-top: 20px;
+  padding: 24px;
+}
+
+.message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.message-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #202e41;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+/* Els avisos del monitor, amb una vora verda a l'esquerra */
+.message-from-monitor {
+  border-left: 3px solid var(--green);
+}
+
+.message-unread {
+  border-color: var(--orange);
+}
+
+.message-meta {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.message-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.message-form .primary-button {
+  align-self: flex-start;
+}
+
+.message-quick-label {
+  color: #dce5f0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Espai entre els missatges del monitor i les targetes dels equips */
+.monitor-messages {
+  margin-bottom: 38px;
+}

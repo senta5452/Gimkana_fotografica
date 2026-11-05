@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
+  MessageCircle,
   Pause,
   Play,
   RotateCcw,
@@ -11,6 +12,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import type {
   Challenge,
+  GameMessage,
   GameResult,
   ServerSubmission,
   Team,
@@ -28,12 +30,23 @@ import JudgeTeamGrid from "./screens/JudgeTeamGrid";
 import ServerModerationSection from "./screens/ServerModerationSection";
 import ChallengeLibraryScreen from "./screens/ChallengeLibraryScreen";
 import GameListSection from "./screens/GameListSection";
+import TeamMessagesSection from "./screens/TeamMessagesSection";
+import MonitorMessagesSection from "./screens/MonitorMessagesSection";
 import type { JudgeGame } from "./screens/GameListSection";
 import TeamAccessSection from "./screens/TeamAccessSection";
 import TeamNameScreen from "./screens/TeamNameScreen";
 
 
 const MONITOR_VIEW_KEY = "monitorView";
+
+// Fins a quin avís del monitor ha llegit un equip (data ISO, "" = cap).
+function readTeamSeenMessagesAt(teamId: string) {
+  try {
+    return localStorage.getItem(`teamSeenMessages:${teamId}`) ?? "";
+  } catch {
+    return "";
+  }
+}
 
 export default function App() {
   
@@ -104,6 +117,11 @@ export default function App() {
   const [teamNameError, setTeamNameError] = useState("");
   const [teamNameBusy, setTeamNameBusy] = useState(false);
 
+  // Missatges amb el monitor i fins a quin avís ha llegit l'equip.
+  const [teamMessages, setTeamMessages] = useState<GameMessage[]>([]);
+  const [teamSeenMessagesAt, setTeamSeenMessagesAt] = useState("");
+  const previousUnseenCount = useRef(0);
+
   // Missatge de l'últim enviament de foto de l'equip.
   const [teamUploadStatus, setTeamUploadStatus] = useState<{
     kind: "sending" | "ok" | "error";
@@ -130,6 +148,7 @@ export default function App() {
     status: string;
     durationSeconds: number | null;
     result: GameResult | null;
+    messages: GameMessage[];
     teams: {
       key: string;
       name: string;
@@ -207,6 +226,7 @@ export default function App() {
       status: data.game?.status ?? "setup",
       durationSeconds: data.game?.durationSeconds ?? null,
       result: data.result ?? null,
+      messages: data.messages ?? [],
       teams: data.teams ?? [],
       receivedAt: Date.now(),
     });
@@ -353,11 +373,13 @@ export default function App() {
       (challenge: {
         id: string;
         title: string;
+        description?: string | null;
         approved: boolean;
         bonus_seconds?: number | null;
       }) => ({
         id: challenge.id,
         title: challenge.title,
+        description: challenge.description,
         approved: challenge.approved,
         bonusSeconds: challenge.bonus_seconds,
       })
@@ -370,6 +392,7 @@ export default function App() {
     });
 
     setTeamSubmissions(data.submissions ?? []);
+    setTeamMessages(data.messages ?? []);
     setTeamResult(data.result ?? null);
 
     if (data.clock) {
@@ -451,6 +474,62 @@ export default function App() {
         error.context instanceof Response ? await error.context.text() : "";
       console.error("judge-set-game-state:", error.message, detail);
     }
+  }
+
+  // Avisos del monitor que l'equip encara no ha vist (es recorda per equip
+  // al localStorage, per no tornar-los a mostrar en recarregar).
+  const unseenMonitorMessages = teamMessages.filter(
+    (message) =>
+      message.sender === "monitor" && message.createdAt > teamSeenMessagesAt
+  );
+  const messageAlert = unseenMonitorMessages[0] ?? null;
+
+  // El mòbil vibra quan arriba un avís nou (on el navegador ho permet).
+  useEffect(() => {
+    if (unseenMonitorMessages.length > previousUnseenCount.current) {
+      navigator.vibrate?.([200, 100, 200]);
+    }
+
+    previousUnseenCount.current = unseenMonitorMessages.length;
+  }, [unseenMonitorMessages.length]);
+
+  function acknowledgeMessage(message: GameMessage) {
+    setTeamSeenMessagesAt(message.createdAt);
+
+    try {
+      const teamId = sessionStorage.getItem("teamId");
+
+      if (teamId) {
+        localStorage.setItem(`teamSeenMessages:${teamId}`, message.createdAt);
+      }
+    } catch {
+      // Sense localStorage, l'avís es podria tornar a mostrar en recarregar.
+    }
+  }
+
+  async function sendTeamMessage(text: string): Promise<string | null> {
+    const token = sessionStorage.getItem("teamToken");
+
+    if (!token) return "La sessió de l'equip ha caducat. Torna a entrar.";
+
+    const { error } = await supabase.functions.invoke("send-team-message", {
+      body: { token, body: text },
+    });
+
+    if (error) {
+      const detail =
+        error.context instanceof Response ? await error.context.text() : "";
+      console.error("send-team-message:", error.message, detail);
+
+      try {
+        return JSON.parse(detail).error ?? "No s'ha pogut enviar el missatge.";
+      } catch {
+        return "No s'ha pogut enviar el missatge.";
+      }
+    }
+
+    await refreshTeamFromServer();
+    return null;
   }
 
   async function uploadPhotoToServer(challengeId: string, file: File) {
@@ -663,6 +742,9 @@ export default function App() {
         }
 
         setTeamSubmissions(gameData.submissions ?? []);
+        setTeamMessages(gameData.messages ?? []);
+        setTeamSeenMessagesAt(readTeamSeenMessagesAt(data.teamId));
+        previousUnseenCount.current = 0;
         setTeamResult(gameData.result ?? null);
 
         // Carreguem els reptes que venen de Supabase
@@ -670,11 +752,13 @@ export default function App() {
           (challenge: {
             id: string;
             title: string;
+            description?: string | null;
             approved: boolean;
             bonus_seconds?: number | null;
           }) => ({
             id: challenge.id,
             title: challenge.title,
+            description: challenge.description,
             approved: challenge.approved,
             bonusSeconds: challenge.bonus_seconds,
           })
@@ -928,6 +1012,13 @@ export default function App() {
                 }}
               />
             ))}
+
+          {currentTeam && (
+            <TeamMessagesSection
+              messages={teamMessages}
+              onSend={sendTeamMessage}
+            />
+          )}
         </section>
       )}
     
@@ -987,6 +1078,44 @@ export default function App() {
           </div>
         )}
       
+      {/* Avís del monitor: a sobre de tot, fins que l'equip el confirma */}
+      {(currentView === "teamA" || currentView === "teamB") &&
+        entryScreen === "home" &&
+        messageAlert && (
+          <div className="result-modal-overlay message-alert-overlay">
+            <section
+              className="result-modal"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="message-alert-title"
+            >
+              <div className="result-modal-trophy">
+                <MessageCircle size={38} />
+              </div>
+
+              <p className="eyebrow">
+                {messageAlert.toAll
+                  ? "AVÍS DEL MONITOR A TOTS ELS EQUIPS"
+                  : "AVÍS DEL MONITOR AL VOSTRE EQUIP"}
+              </p>
+
+              <h1 id="message-alert-title" className="message-alert-text">
+                {messageAlert.body}
+              </h1>
+
+              <div className="result-modal-actions">
+                <button
+                  className="primary-button result-modal-button"
+                  onClick={() => acknowledgeMessage(messageAlert)}
+                  style={{ marginTop: 0 }}
+                >
+                  D'acord
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+
           {(currentView === "summaryA" || currentView === "summaryB") && (() => {
             const teamId = currentView === "summaryA" ? "A" : "B";
             const team = currentTeam?.id === teamId ? currentTeam : null;
@@ -1101,6 +1230,15 @@ export default function App() {
           </div>
         </section>
       )}
+
+      <MonitorMessagesSection
+        gameId={selectedGameId}
+        messages={judgeServer?.messages ?? []}
+        teamNames={Object.fromEntries(
+          judgeTeams.map((team) => [team.id, team.name])
+        )}
+        onSent={loadServerSubmissions}
+      />
 
       <JudgeTeamGrid
         teams={judgeTeams}

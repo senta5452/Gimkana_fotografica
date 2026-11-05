@@ -159,6 +159,25 @@ Deno.serve(async (req) => {
 
     const submissions = await submissionsResponse.json();
 
+    // Missatges de l'equip: avisos per a tothom, avisos per a aquest equip
+    // i les seves respostes (els últims 50, del més antic al més nou).
+    const messagesResponse = await fetch(
+      `${supabaseUrl}/rest/v1/messages?game_id=eq.${team.game_id}&or=(team_id.is.null,team_id.eq.${team.id})&select=id,sender,team_id,body,created_at&order=created_at.desc&limit=50`,
+      { headers },
+    );
+
+    if (!messagesResponse.ok) {
+      throw new Error("No s'han pogut consultar els missatges.");
+    }
+
+    const messages: {
+      id: string;
+      sender: string;
+      team_id: string | null;
+      body: string;
+      created_at: string;
+    }[] = (await messagesResponse.json()).reverse();
+
     const nowMs = Date.now();
     const clock = getTeamClock(
       game,
@@ -264,6 +283,13 @@ Deno.serve(async (req) => {
         challenges,
         clock: { ...clock, serverNow: new Date(nowMs).toISOString() },
         result,
+        messages: messages.map((item) => ({
+          id: item.id,
+          sender: item.sender,
+          toAll: item.team_id === null,
+          body: item.body,
+          createdAt: item.created_at,
+        })),
         submissions: submissions.map(
           (item: {
             id: string;

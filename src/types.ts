@@ -1,6 +1,7 @@
 export type Challenge = {
   id: number | string;
   title: string;
+  description?: string | null;
   approved: boolean;
   bonusSeconds?: number | null;
 };
@@ -12,6 +13,18 @@ export type Team = {
   challenges: Challenge[];
   finished: boolean;
   finishReason: string | null;
+};
+
+// Missatge entre el monitor i els equips.
+export type GameMessage = {
+  id: string;
+  sender: "monitor" | "team";
+  body: string;
+  createdAt: string;
+  // Pantalla de l'equip: avís per a tots els equips
+  toAll?: boolean;
+  // Panell del monitor: equip ("A"/"B"); buit = avís per a tots
+  teamKey?: string;
 };
 
 // Resultat de la partida calculat pel servidor (getGameResult).

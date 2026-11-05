@@ -134,6 +134,16 @@ Deno.serve(async (req) => {
         throw new Error("No s'han pogut esborrar els enviaments.");
       }
 
+      // 3b. Missatges esborrats (la partida torna a començar de zero)
+      const { error: messagesError } = await admin
+        .from("messages")
+        .delete()
+        .eq("game_id", game.id);
+
+      if (messagesError) {
+        throw new Error("No s'han pogut esborrar els missatges.");
+      }
+
       // 4. Reptes sense aprovar
       const { error: challengesError } = await admin
         .from("challenges")

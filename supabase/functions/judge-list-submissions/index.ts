@@ -127,12 +127,26 @@ Deno.serve(async (req) => {
     // 3. Reptes dels equips
     const { data: challenges, error: challengesError } = await admin
       .from("challenges")
-      .select("id, team_id, title, approved, position, bonus_seconds")
+      .select(
+        "id, team_id, title, description, approved, position, bonus_seconds",
+      )
       .in("team_id", teamIds)
       .order("position");
 
     if (challengesError) {
       throw new Error("No s'han pogut consultar els reptes.");
+    }
+
+    // 3b. Missatges de la partida (els últims 100)
+    const { data: messageRows, error: messagesError } = await admin
+      .from("messages")
+      .select("id, sender, team_id, body, created_at")
+      .eq("game_id", game.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (messagesError) {
+      throw new Error("No s'han pogut consultar els missatges.");
     }
 
     // 4. Enviaments dels equips
@@ -199,6 +213,16 @@ Deno.serve(async (req) => {
 
     return response({
       result,
+      // Del més antic al més nou; teamKey buit = avís per a tots els equips
+      messages: (messageRows ?? []).reverse().map((item) => ({
+        id: item.id,
+        sender: item.sender,
+        teamKey: item.team_id
+          ? teamById.get(item.team_id)?.team_key ?? ""
+          : "",
+        body: item.body,
+        createdAt: item.created_at,
+      })),
       game: {
         status: game.status,
         durationSeconds: game.duration_seconds,
@@ -222,6 +246,7 @@ Deno.serve(async (req) => {
           challenges: teamChallenges.map((challenge) => ({
             id: challenge.id,
             title: challenge.title,
+            description: challenge.description,
             approved: challenge.approved,
             bonusSeconds: challenge.bonus_seconds,
           })),

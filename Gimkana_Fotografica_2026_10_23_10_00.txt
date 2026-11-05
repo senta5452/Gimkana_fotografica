@@ -473,3 +473,15 @@ end $$;
 - Fotos reduïdes abans de pujar-les i límits del bucket.
 - Generar un PIN nou per equip; editar i esborrar partides.
 - Estètica cohesionada (`style.css`, al final): camps d'escriptura amb fons com els botons secundaris, desplegables com els de la pantalla de l'equip, classes `sub-panel` (subseccions), `choice-row` (opcions amb casella) i `pin-value`.
+
+---
+
+## 13. Publicació i canvis posteriors (confirmats)
+
+- **Publicada a Vercel** (24/10/2026), connectada al repositori de GitHub: cada `git push` a `main` torna a publicar l'app automàticament. Variables d'entorn a Vercel: `VITE_SUPABASE_URL` i `VITE_SUPABASE_PUBLISHABLE_KEY`. No s'ha instal·lat cap integració del Marketplace de Vercel. URL de producció: pendent d'apuntar aquí.
+- Per provar al mòbil abans de publicar: `npm.cmd run dev -- --host` i obrir l'adreça Network al mòbil (mateix wifi).
+- Equips: dos botons per a la foto, "Fer una fotografia" (càmera, `capture="environment"`) i "Triar de la galeria" (sense `capture`).
+- Descripció dels reptes: desplegable "Veure la descripció" (`ChallengeDescription`) a la pantalla de l'equip i a les targetes del panell. `judge-list-submissions` retorna també `description` de cada repte.
+- Comunicació monitor ↔ equips: taula `messages` (`id`, `game_id` → games cascade, `team_id` → teams cascade, buit = avís a tots; `sender` `monitor`/`team`; `body` 1-300 caràcters; `created_at`), amb RLS i sense polítiques. Funcions noves `judge-send-message` (JWT del monitor; `gameId`, `teamKey` A/B o null, `body`) i `send-team-message` (token d'equip, `body`). `get-team-game` retorna els últims 50 missatges de l'equip (`messages`, amb `toAll`) i `judge-list-submissions` els últims 100 de la partida (amb `teamKey`). `judge-reset-game` esborra els missatges de la partida.
+- Pantalla de l'equip: finestra d'avís a sobre de tot amb "D'acord" i vibració (Android); els avisos vistos es recorden al `localStorage` (`teamSeenMessages:<teamId>`). Apartat "Missatges amb el monitor" (`TeamMessagesSection`) per respondre.
+- Panell del monitor: apartat "Missatges amb els equips" (`MonitorMessagesSection`) amb destinatari, quatre missatges ràpids, historial i comptador de respostes no llegides (`localStorage`, `monitorSeenMessages:<gameId>`).
