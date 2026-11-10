@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Send } from "lucide-react";
-import type { GameMessage } from "../types";
+import type { GameMessage } from "../../types";
 
 type TeamMessagesSectionProps = {
   messages: GameMessage[];

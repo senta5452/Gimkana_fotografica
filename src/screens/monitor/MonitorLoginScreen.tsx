@@ -1,4 +1,4 @@
-type JudgeLoginScreenProps = {
+type MonitorLoginScreenProps = {
   authLoading: boolean;
   email: string;
   onEmailChange: (value: string) => void;
@@ -9,7 +9,7 @@ type JudgeLoginScreenProps = {
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 };
 
-export default function JudgeLoginScreen({
+export default function MonitorLoginScreen({
   authLoading,
   email,
   onEmailChange,
@@ -18,7 +18,7 @@ export default function JudgeLoginScreen({
   error,
   busy,
   onSubmit,
-}: JudgeLoginScreenProps) {
+}: MonitorLoginScreenProps) {
   return (
     <section
       className="team-card"

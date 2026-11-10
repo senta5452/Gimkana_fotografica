@@ -1,39 +1,33 @@
+// Un equip envia la foto d'un repte (formulari amb token, challengeId i photo).
 import {
   getApprovedBonusSeconds,
   getTeamClock,
 } from "../_shared/game-clock.ts";
+import { handlePreflight, isUuid, jsonResponse } from "../_shared/http.ts";
+import { PHOTO_BUCKET } from "../_shared/photos.ts";
+import { createAdminClient } from "../_shared/supabase.ts";
+import { requireTeamSession } from "../_shared/team-session.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, apikey, content-type, x-client-info, x-supabase-api-version",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const BUCKET = "submission-photos";
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const ALLOWED_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
 };
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const early = handlePreflight(req);
+  if (early) return early;
 
   try {
-    const form = await req.formData();
+    let form: FormData;
+
+    try {
+      form = await req.formData();
+    } catch {
+      return jsonResponse({ error: "El cos de la petició no és vàlid." }, 400);
+    }
+
     const token = form.get("token");
     const challengeId = form.get("challengeId");
     const photo = form.get("photo");
@@ -42,7 +36,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Sessió no vàlida." }, 401);
     }
 
-    if (typeof challengeId !== "string" || !UUID_PATTERN.test(challengeId)) {
+    if (!isUuid(challengeId)) {
       return jsonResponse({ error: "Repte no vàlid." }, 400);
     }
 
@@ -66,77 +60,37 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const secretKeysRaw = Deno.env.get("SUPABASE_SECRET_KEYS");
-
-    if (!supabaseUrl || !secretKeysRaw) {
-      throw new Error("Falta la configuració de Supabase.");
-    }
-
-    const secretKey = JSON.parse(secretKeysRaw).default;
-
-    if (!secretKey) {
-      throw new Error("No s'ha trobat la clau de servidor.");
-    }
-
-    const tokenBytes = new TextEncoder().encode(token);
-    const digest = await crypto.subtle.digest("SHA-256", tokenBytes);
-    const tokenHash = Array.from(new Uint8Array(digest))
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
-
-    const headers = {
-      apikey: secretKey,
-      Authorization: `Bearer ${secretKey}`,
-      "Content-Type": "application/json",
-    };
+    const admin = createAdminClient();
 
     // 1. Validar la sessió de l'equip
-    const sessionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/team_sessions?token_hash=eq.${tokenHash}&revoked_at=is.null&select=team_id,expires_at`,
-      { headers },
-    );
-
-    if (!sessionResponse.ok) {
-      throw new Error("No s'ha pogut validar la sessió.");
-    }
-
-    const session = (await sessionResponse.json())[0];
-
-    if (!session || new Date(session.expires_at).getTime() <= Date.now()) {
-      return jsonResponse(
-        { error: "La sessió ha caducat. Torna a entrar." },
-        401,
-      );
-    }
+    const session = await requireTeamSession(admin, token);
+    if (session instanceof Response) return session;
 
     // 2. Recuperar l'equip
-    const teamResponse = await fetch(
-      `${supabaseUrl}/rest/v1/teams?id=eq.${session.team_id}&select=id,game_id,finished_at,finish_reason,finish_elapsed_seconds`,
-      { headers },
-    );
+    const { data: team, error: teamError } = await admin
+      .from("teams")
+      .select("id, game_id, finished_at, finish_reason, finish_elapsed_seconds")
+      .eq("id", session.teamId)
+      .maybeSingle();
 
-    if (!teamResponse.ok) {
+    if (teamError) {
       throw new Error("No s'han pogut consultar les dades de l'equip.");
     }
-
-    const team = (await teamResponse.json())[0];
 
     if (!team) {
       return jsonResponse({ error: "No s'ha trobat l'equip." }, 404);
     }
 
     // 2b. La partida ha d'estar en marxa i l'equip no pot haver acabat
-    const gameResponse = await fetch(
-      `${supabaseUrl}/rest/v1/games?id=eq.${team.game_id}&select=status,duration_seconds,clock_started_at,elapsed_seconds`,
-      { headers },
-    );
+    const { data: game, error: gameError } = await admin
+      .from("games")
+      .select("status, duration_seconds, clock_started_at, elapsed_seconds")
+      .eq("id", team.game_id)
+      .maybeSingle();
 
-    if (!gameResponse.ok) {
+    if (gameError) {
       throw new Error("No s'ha pogut consultar la partida.");
     }
-
-    const game = (await gameResponse.json())[0];
 
     if (!game) {
       return jsonResponse({ error: "No s'ha trobat la partida." }, 404);
@@ -146,19 +100,20 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "La partida no està en marxa." }, 409);
     }
 
-    const approvedResponse = await fetch(
-      `${supabaseUrl}/rest/v1/challenges?team_id=eq.${team.id}&approved=eq.true&select=approved,bonus_seconds`,
-      { headers },
-    );
+    const { data: approvedRows, error: approvedError } = await admin
+      .from("challenges")
+      .select("approved, bonus_seconds")
+      .eq("team_id", team.id)
+      .eq("approved", true);
 
-    if (!approvedResponse.ok) {
+    if (approvedError) {
       throw new Error("No s'han pogut consultar els reptes aprovats.");
     }
 
     const clock = getTeamClock(
       game,
       team,
-      getApprovedBonusSeconds(await approvedResponse.json()),
+      getApprovedBonusSeconds(approvedRows ?? []),
       Date.now(),
     );
 
@@ -170,16 +125,16 @@ Deno.serve(async (req) => {
     }
 
     // 3. Comprovar que el repte és d'aquest equip i no està aprovat
-    const challengeResponse = await fetch(
-      `${supabaseUrl}/rest/v1/challenges?id=eq.${challengeId}&team_id=eq.${team.id}&select=id,approved`,
-      { headers },
-    );
+    const { data: challenge, error: challengeError } = await admin
+      .from("challenges")
+      .select("id, approved")
+      .eq("id", challengeId)
+      .eq("team_id", team.id)
+      .maybeSingle();
 
-    if (!challengeResponse.ok) {
+    if (challengeError) {
       throw new Error("No s'ha pogut consultar el repte.");
     }
-
-    const challenge = (await challengeResponse.json())[0];
 
     if (!challenge) {
       return jsonResponse({ error: "No s'ha trobat el repte." }, 404);
@@ -190,16 +145,18 @@ Deno.serve(async (req) => {
     }
 
     // 4. Només una foto pendent per equip
-    const pendingResponse = await fetch(
-      `${supabaseUrl}/rest/v1/submissions?submitted_by_team=eq.${team.id}&status=eq.pending&select=id&limit=1`,
-      { headers },
-    );
+    const { data: pending, error: pendingError } = await admin
+      .from("submissions")
+      .select("id")
+      .eq("submitted_by_team", team.id)
+      .eq("status", "pending")
+      .limit(1);
 
-    if (!pendingResponse.ok) {
+    if (pendingError) {
       throw new Error("No s'han pogut consultar els enviaments.");
     }
 
-    if ((await pendingResponse.json()).length > 0) {
+    if ((pending ?? []).length > 0) {
       return jsonResponse(
         { error: "Ja tens una fotografia pendent de validació." },
         409,
@@ -207,50 +164,39 @@ Deno.serve(async (req) => {
     }
 
     // 5. Pujar la foto al bucket privat
-    const photoPath = `${team.game_id}/${team.id}/${crypto.randomUUID()}.${extension}`;
+    const photoPath =
+      `${team.game_id}/${team.id}/${crypto.randomUUID()}.${extension}`;
 
-    const uploadResponse = await fetch(
-      `${supabaseUrl}/storage/v1/object/${BUCKET}/${photoPath}`,
-      {
-        method: "POST",
-        headers: {
-          apikey: secretKey,
-          Authorization: `Bearer ${secretKey}`,
-          "Content-Type": photo.type,
-        },
-        body: await photo.arrayBuffer(),
-      },
-    );
+    const { error: uploadError } = await admin.storage
+      .from(PHOTO_BUCKET)
+      .upload(photoPath, await photo.arrayBuffer(), {
+        contentType: photo.type,
+      });
 
-    if (!uploadResponse.ok) {
-      console.error("submit-photo upload:", await uploadResponse.text());
+    if (uploadError) {
+      console.error("submit-photo upload:", uploadError);
       throw new Error("No s'ha pogut pujar la fotografia.");
     }
 
     // 6. Crear la fila a submissions
-    const insertResponse = await fetch(`${supabaseUrl}/rest/v1/submissions`, {
-      method: "POST",
-      headers: { ...headers, Prefer: "return=representation" },
-      body: JSON.stringify({
+    const { data: submission, error: insertError } = await admin
+      .from("submissions")
+      .insert({
         challenge_id: challengeId,
         submitted_by_team: team.id,
         photo_path: photoPath,
-      }),
-    });
+      })
+      .select("id, challenge_id, status, received_at")
+      .single();
 
-    if (!insertResponse.ok) {
-      console.error("submit-photo insert:", await insertResponse.text());
+    if (insertError || !submission) {
+      console.error("submit-photo insert:", insertError);
 
       // Si falla l'inserció, esborrem la foto per no deixar fitxers orfes
-      await fetch(`${supabaseUrl}/storage/v1/object/${BUCKET}/${photoPath}`, {
-        method: "DELETE",
-        headers,
-      });
+      await admin.storage.from(PHOTO_BUCKET).remove([photoPath]);
 
       throw new Error("No s'ha pogut desar l'enviament.");
     }
-
-    const submission = (await insertResponse.json())[0];
 
     return jsonResponse({
       submission: {
@@ -262,7 +208,6 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("submit-photo:", error);
-
     return jsonResponse({ error: "No s'ha pogut enviar la fotografia." }, 500);
   }
 });

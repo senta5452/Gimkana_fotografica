@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Send } from "lucide-react";
-import { supabase } from "../supabase";
-import type { GameMessage } from "../types";
+import { callFunction } from "../../lib/callFunction";
+import type { GameMessage } from "../../types";
 
 type MonitorMessagesSectionProps = {
   gameId: string;
@@ -80,17 +80,16 @@ export default function MonitorMessagesSection({
     setSending(true);
     setErrorMessage("");
 
-    const { error } = await supabase.functions.invoke("judge-send-message", {
-      body: { gameId, teamKey: recipient || null, body: text.trim() },
-    });
+    const { error } = await callFunction(
+      "judge-send-message",
+      { gameId, teamKey: recipient || null, body: text.trim() },
+      "No s'ha pogut enviar el missatge."
+    );
 
     setSending(false);
 
     if (error) {
-      const detail =
-        error.context instanceof Response ? await error.context.text() : "";
-      console.error("judge-send-message:", error.message, detail);
-      setErrorMessage("No s'ha pogut enviar el missatge.");
+      setErrorMessage(error);
       return;
     }
 

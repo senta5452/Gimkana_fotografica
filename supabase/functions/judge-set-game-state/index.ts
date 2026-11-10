@@ -1,95 +1,41 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, apikey, content-type, x-client-info, x-supabase-api-version",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function response(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+// El monitor inicia, pausa o reprèn el rellotge d'una partida.
+import {
+  handlePreflight,
+  invalidBodyResponse,
+  isUuid,
+  jsonResponse,
+  readJsonBody,
+} from "../_shared/http.ts";
+import { requireMonitor } from "../_shared/supabase.ts";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
-  if (req.method !== "POST") {
-    return response({ error: "Mètode no permès." }, 405);
-  }
+  const early = handlePreflight(req);
+  if (early) return early;
 
   try {
-    const authorization = req.headers.get("Authorization");
+    const auth = await requireMonitor(req);
+    if (auth instanceof Response) return auth;
+    const { admin, userId } = auth;
 
-    if (!authorization?.startsWith("Bearer ")) {
-      return response({ error: "Cal iniciar sessió com a monitor." }, 401);
-    }
+    const body = await readJsonBody<{ gameId?: unknown; action?: unknown }>(req);
+    if (!body) return invalidBodyResponse();
 
-    const accessToken = authorization.slice("Bearer ".length);
-    const url = Deno.env.get("SUPABASE_URL");
-
-    const publishableKeys = JSON.parse(
-      Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "{}",
-    );
-    const secretKeys = JSON.parse(
-      Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}",
-    );
-
-    const publishableKey = publishableKeys.default;
-    const secretKey = secretKeys.default;
-
-    if (!url || !publishableKey || !secretKey) {
-      console.error("Falta la configuració interna de Supabase.");
-      return response({ error: "Configuració del servidor incompleta." }, 500);
-    }
-
-    const authClient = createClient(url, publishableKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    const { data: userData, error: authError } =
-      await authClient.auth.getUser(accessToken);
-
-    if (authError || !userData.user) {
-      return response({ error: "Sessió de monitor no vàlida." }, 401);
-    }
-
-    const admin = createClient(url, secretKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    let body: { gameId?: unknown; action?: unknown };
-
-    try {
-      body = await req.json();
-    } catch {
-      return response({ error: "El cos de la petició no és vàlid." }, 400);
-    }
-
-    if (typeof body.gameId !== "string" || !UUID_PATTERN.test(body.gameId)) {
-      return response({ error: "Identificador de partida no vàlid." }, 400);
+    if (!isUuid(body.gameId)) {
+      return jsonResponse({ error: "Identificador de partida no vàlid." }, 400);
     }
 
     if (body.action !== "start" && body.action !== "pause") {
-      return response({ error: "Acció no vàlida." }, 400);
+      return jsonResponse({ error: "Acció no vàlida." }, 400);
     }
 
     const action = body.action;
 
-    // 1. La partida ha de ser d'aquest jutge
+    // 1. La partida ha de ser d'aquest monitor
     const { data: game, error: gameError } = await admin
       .from("games")
       .select("id, status, started_at, clock_started_at, elapsed_seconds")
       .eq("id", body.gameId)
-      .eq("judge_id", userData.user.id)
+      .eq("judge_id", userId)
       .maybeSingle();
 
     if (gameError) {
@@ -97,7 +43,7 @@ Deno.serve(async (req) => {
     }
 
     if (!game) {
-      return response({ error: "No s'ha trobat la partida." }, 404);
+      return jsonResponse({ error: "No s'ha trobat la partida." }, 404);
     }
 
     const now = new Date();
@@ -105,11 +51,11 @@ Deno.serve(async (req) => {
 
     if (action === "start") {
       if (game.status === "finished") {
-        return response({ error: "La partida ja ha acabat." }, 409);
+        return jsonResponse({ error: "La partida ja ha acabat." }, 409);
       }
 
       if (game.status === "active") {
-        return response({ error: "La partida ja està en marxa." }, 409);
+        return jsonResponse({ error: "La partida ja està en marxa." }, 409);
       }
 
       changes = {
@@ -119,7 +65,7 @@ Deno.serve(async (req) => {
       };
     } else {
       if (game.status !== "active") {
-        return response({ error: "La partida no està en marxa." }, 409);
+        return jsonResponse({ error: "La partida no està en marxa." }, 409);
       }
 
       const runningSeconds = game.clock_started_at
@@ -150,13 +96,13 @@ Deno.serve(async (req) => {
     }
 
     if (!updated) {
-      return response(
+      return jsonResponse(
         { error: "L'estat de la partida ha canviat. Torna-ho a provar." },
         409,
       );
     }
 
-    return response({
+    return jsonResponse({
       game: {
         status: updated.status,
         startedAt: updated.started_at,
@@ -167,6 +113,6 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("judge-set-game-state:", error);
-    return response({ error: "No s'ha pogut canviar l'estat de la partida." }, 500);
+    return jsonResponse({ error: "No s'ha pogut canviar l'estat de la partida." }, 500);
   }
 });

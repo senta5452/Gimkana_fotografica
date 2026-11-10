@@ -1,15 +1,8 @@
 import { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { supabase } from "../supabase";
-import { formatBonus } from "../utils";
-
-export type LibraryChallenge = {
-  id: string;
-  title: string;
-  description: string | null;
-  // Temps propi del repte; null = el temps per defecte de la partida.
-  bonus_seconds: number | null;
-};
+import { supabase } from "../../lib/supabase";
+import { formatBonus } from "../../lib/format";
+import type { LibraryChallenge } from "../../types";
 
 type ChallengeLibraryScreenProps = {
   onBack: () => void;

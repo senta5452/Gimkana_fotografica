@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { KeyRound } from "lucide-react";
-import { supabase } from "../supabase";
+import { callFunction } from "../../lib/callFunction";
 
 type TeamAccessSectionProps = {
   gameId: string;
@@ -30,22 +30,21 @@ export default function TeamAccessSection({
     setConfirmTeam(null);
     setErrorMessage("");
 
-    const { data, error } = await supabase.functions.invoke(
+    const { data, error } = await callFunction<{ pin: string }>(
       "judge-regenerate-pin",
-      { body: { gameId, teamKey } }
+      { gameId, teamKey },
+      "No s'ha pogut generar el PIN nou."
     );
 
     setBusyTeam(null);
 
     if (error || !data?.pin) {
-      const detail =
-        error?.context instanceof Response ? await error.context.text() : "";
-      console.error("judge-regenerate-pin:", error?.message, detail);
-      setErrorMessage("No s'ha pogut generar el PIN nou.");
+      setErrorMessage(error ?? "No s'ha pogut generar el PIN nou.");
       return;
     }
 
-    setNewPins((current) => ({ ...current, [teamKey]: data.pin }));
+    const pin = data.pin;
+    setNewPins((current) => ({ ...current, [teamKey]: pin }));
   }
 
   return (

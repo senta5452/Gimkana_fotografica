@@ -1,18 +1,18 @@
 import { Clock3, Flag } from "lucide-react";
 
-type JudgeHeaderProps = {
+type MonitorHeaderProps = {
   durationSeconds: number | null;
   running: boolean;
   gameStarted: boolean;
   allTeamsFinished: boolean;
 };
 
-export default function JudgeHeader({
+export default function MonitorHeader({
   durationSeconds,
   running,
   gameStarted,
   allTeamsFinished,
-}: JudgeHeaderProps) {
+}: MonitorHeaderProps) {
   return (
     <>
       <header className="topbar">

@@ -1,11 +1,11 @@
 type HomeScreenProps = {
-  onJudge: () => void;
+  onMonitor: () => void;
   onTeamA: () => void;
   onTeamB: () => void;
 };
 
 export default function HomeScreen({
-  onJudge,
+  onMonitor,
   onTeamA,
   onTeamB,
 }: HomeScreenProps) {
@@ -18,7 +18,7 @@ export default function HomeScreen({
       </header>
 
       <div className="home-options">
-        <button className="home-option" onClick={onJudge}>
+        <button className="home-option" onClick={onMonitor}>
           <span className="home-option-icon">⚖️</span>
           <span className="home-option-text">
             <strong>Monitor</strong>

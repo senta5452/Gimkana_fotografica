@@ -1,332 +1,187 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+// Dades que veu un equip: partida, reptes, enviaments, missatges, rellotge
+// i resultat. L'equip la consulta cada 5 segons.
 import {
   getApprovedBonusSeconds,
   getGameResult,
   getTeamClock,
 } from "../_shared/game-clock.ts";
+import {
+  handlePreflight,
+  invalidBodyResponse,
+  jsonResponse,
+  readJsonBody,
+} from "../_shared/http.ts";
+import { signPhotoUrls } from "../_shared/photos.ts";
+import { createAdminClient } from "../_shared/supabase.ts";
+import { requireTeamSession } from "../_shared/team-session.ts";
 
-const BUCKET = "submission-photos";
-const SIGNED_URL_SECONDS = 60 * 60;
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, apikey, content-type, x-client-info, x-supabase-api-version",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const TEAM_COLUMNS =
+  "id, game_id, team_key, name, finished_at, finish_reason, finish_elapsed_seconds";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const early = handlePreflight(req);
+  if (early) return early;
 
   try {
-    const { token } = await req.json();
+    const body = await readJsonBody<{ token?: unknown }>(req);
+    if (!body) return invalidBodyResponse();
 
-    if (typeof token !== "string" || token.length < 20) {
-      return new Response(
-        JSON.stringify({ error: "Sessió no vàlida." }),
-        {
-          status: 401,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    }
+    const admin = createAdminClient();
+    const session = await requireTeamSession(admin, body.token);
+    if (session instanceof Response) return session;
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const secretKeysRaw = Deno.env.get("SUPABASE_SECRET_KEYS");
+    // 1. Equip i partida
+    const { data: team, error: teamError } = await admin
+      .from("teams")
+      .select(TEAM_COLUMNS)
+      .eq("id", session.teamId)
+      .maybeSingle();
 
-    if (!supabaseUrl || !secretKeysRaw) {
-      throw new Error("Falta la configuració de Supabase.");
-    }
-
-    const secretKeys = JSON.parse(secretKeysRaw);
-    const secretKey = secretKeys.default;
-
-    if (!secretKey) {
-      throw new Error("No s'ha trobat la clau de servidor.");
-    }
-
-    const tokenBytes = new TextEncoder().encode(token);
-    const digest = await crypto.subtle.digest("SHA-256", tokenBytes);
-    const tokenHash = Array.from(new Uint8Array(digest))
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
-
-    const headers = {
-      apikey: secretKey,
-      Authorization: `Bearer ${secretKey}`,
-      "Content-Type": "application/json",
-    };
-
-    const sessionResponse = await fetch(
-      `${supabaseUrl}/rest/v1/team_sessions?token_hash=eq.${tokenHash}&revoked_at=is.null&select=team_id,expires_at`,
-      { headers },
-    );
-
-    if (!sessionResponse.ok) {
-      throw new Error("No s'ha pogut validar la sessió.");
-    }
-
-    const sessions = await sessionResponse.json();
-    const session = sessions[0];
-
-    if (!session || new Date(session.expires_at).getTime() <= Date.now()) {
-      return new Response(
-        JSON.stringify({ error: "La sessió ha caducat. Torna a entrar." }),
-        {
-          status: 401,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    }
-
-    const teamResponse = await fetch(
-      `${supabaseUrl}/rest/v1/teams?id=eq.${session.team_id}&select=id,game_id,team_key,name,finished_at,finish_reason,finish_elapsed_seconds`,
-      { headers },
-    );
-
-    if (!teamResponse.ok) {
+    if (teamError) {
       throw new Error("No s'han pogut consultar les dades de l'equip.");
     }
 
-    const teams = await teamResponse.json();
-    const team = teams[0];
-
     if (!team) {
-      return new Response(
-        JSON.stringify({ error: "No s'ha trobat l'equip." }),
-        {
-          status: 404,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      return jsonResponse({ error: "No s'ha trobat l'equip." }, 404);
     }
 
-    const gameResponse = await fetch(
-      `${supabaseUrl}/rest/v1/games?id=eq.${team.game_id}&select=id,name,game_code,status,duration_seconds,started_at,finished_at,clock_started_at,elapsed_seconds`,
-      { headers },
-    );
+    const { data: game, error: gameError } = await admin
+      .from("games")
+      .select(
+        "id, name, game_code, status, duration_seconds, started_at, finished_at, clock_started_at, elapsed_seconds",
+      )
+      .eq("id", team.game_id)
+      .maybeSingle();
 
-    if (!gameResponse.ok) {
+    if (gameError) {
       throw new Error("No s'han pogut consultar les dades de la partida.");
     }
 
-    const games = await gameResponse.json();
-    const game = games[0];
-
     if (!game) {
-      return new Response(
-        JSON.stringify({ error: "No s'ha trobat la partida." }),
-        {
-          status: 404,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      return jsonResponse({ error: "No s'ha trobat la partida." }, 404);
     }
 
-     const challengesResponse = await fetch(
-      `${supabaseUrl}/rest/v1/challenges?team_id=eq.${team.id}&select=id,title,description,position,approved,bonus_seconds&order=position.asc`,
-      { headers },
-    );
+    // 2. Reptes i enviaments de l'equip
+    const { data: challenges, error: challengesError } = await admin
+      .from("challenges")
+      .select("id, title, description, position, approved, bonus_seconds")
+      .eq("team_id", team.id)
+      .order("position");
 
-    if (!challengesResponse.ok) {
+    if (challengesError) {
       throw new Error("No s'han pogut consultar els reptes de l'equip.");
     }
 
-    const challenges = await challengesResponse.json();
+    const { data: submissions, error: submissionsError } = await admin
+      .from("submissions")
+      .select("id, challenge_id, photo_path, status, judge_comment, received_at")
+      .eq("submitted_by_team", team.id)
+      .order("received_at");
 
-    const submissionsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/submissions?submitted_by_team=eq.${team.id}&select=id,challenge_id,photo_path,status,judge_comment,received_at&order=received_at.asc`,
-      { headers },
-    );
-
-    if (!submissionsResponse.ok) {
+    if (submissionsError) {
       throw new Error("No s'han pogut consultar els enviaments de l'equip.");
     }
 
-    const submissions = await submissionsResponse.json();
+    // 3. Missatges: avisos per a tothom, avisos per a aquest equip i les
+    //    seves respostes (els últims 50).
+    const { data: messages, error: messagesError } = await admin
+      .from("messages")
+      .select("id, sender, team_id, body, created_at")
+      .eq("game_id", team.game_id)
+      .or(`team_id.is.null,team_id.eq.${team.id}`)
+      .order("created_at", { ascending: false })
+      .limit(50);
 
-    // Missatges de l'equip: avisos per a tothom, avisos per a aquest equip
-    // i les seves respostes (els últims 50, del més antic al més nou).
-    const messagesResponse = await fetch(
-      `${supabaseUrl}/rest/v1/messages?game_id=eq.${team.game_id}&or=(team_id.is.null,team_id.eq.${team.id})&select=id,sender,team_id,body,created_at&order=created_at.desc&limit=50`,
-      { headers },
-    );
-
-    if (!messagesResponse.ok) {
+    if (messagesError) {
       throw new Error("No s'han pogut consultar els missatges.");
     }
 
-    const messages: {
-      id: string;
-      sender: string;
-      team_id: string | null;
-      body: string;
-      created_at: string;
-    }[] = (await messagesResponse.json()).reverse();
+    // 4. Equips de la partida i reptes aprovats de cadascun, per calcular
+    //    el resultat (cal conèixer també l'altre equip).
+    const { data: gameTeams, error: gameTeamsError } = await admin
+      .from("teams")
+      .select(TEAM_COLUMNS)
+      .eq("game_id", game.id);
+
+    if (gameTeamsError) {
+      throw new Error("No s'han pogut consultar els equips de la partida.");
+    }
+
+    const { data: approvedRows, error: approvedError } = await admin
+      .from("challenges")
+      .select("team_id, approved, bonus_seconds")
+      .in("team_id", (gameTeams ?? []).map((item) => item.id))
+      .eq("approved", true);
+
+    if (approvedError) {
+      throw new Error("No s'han pogut consultar els reptes aprovats.");
+    }
 
     const nowMs = Date.now();
     const clock = getTeamClock(
       game,
       team,
-      getApprovedBonusSeconds(challenges),
+      getApprovedBonusSeconds(challenges ?? []),
       nowMs,
     );
 
-    // Equips de la partida i reptes aprovats de cadascun, per calcular
-    // el resultat (cal conèixer també l'altre equip).
-    const gameTeamsResponse = await fetch(
-      `${supabaseUrl}/rest/v1/teams?game_id=eq.${game.id}&select=id,team_key,name,finished_at,finish_reason,finish_elapsed_seconds`,
-      { headers },
-    );
-
-    if (!gameTeamsResponse.ok) {
-      throw new Error("No s'han pogut consultar els equips de la partida.");
-    }
-
-    const gameTeams = await gameTeamsResponse.json();
-    const gameTeamIds = gameTeams.map((item: { id: string }) => item.id);
-
-    const approvedResponse = await fetch(
-      `${supabaseUrl}/rest/v1/challenges?team_id=in.(${gameTeamIds.join(",")})&approved=is.true&select=team_id,approved,bonus_seconds`,
-      { headers },
-    );
-
-    if (!approvedResponse.ok) {
-      throw new Error("No s'han pogut consultar els reptes aprovats.");
-    }
-
-    const approvedRows: {
-      team_id: string;
-      approved: boolean;
-      bonus_seconds: number | null;
-    }[] = await approvedResponse.json();
-
     const result = getGameResult(
       game.status,
-      gameTeams.map(
-        (item: {
-          id: string;
-          team_key: string;
-          name: string;
-          finished_at: string | null;
-          finish_reason: string | null;
-          finish_elapsed_seconds: number | null;
-        }) => {
-          const teamRows = approvedRows.filter(
-            (row) => row.team_id === item.id,
-          );
+      (gameTeams ?? []).map((item) => {
+        const teamRows = (approvedRows ?? []).filter(
+          (row) => row.team_id === item.id,
+        );
 
-          return {
-            key: item.team_key,
-            name: item.name,
-            approvedCount: teamRows.length,
-            clock: getTeamClock(
-              game,
-              item,
-              getApprovedBonusSeconds(teamRows),
-              nowMs,
-            ),
-          };
-        },
-      ),
-    );
-
-    // Enllaços temporals a les fotos, només quan la partida ha acabat
-    // (els fa servir el resum de l'equip).
-    const urlByPath = new Map<string, string>();
-    const paths = submissions.map(
-      (item: { photo_path: string }) => item.photo_path,
-    );
-
-    if (result.over && paths.length > 0) {
-      const admin = createClient(supabaseUrl, secretKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-
-      const { data: signed, error: signedError } = await admin.storage
-        .from(BUCKET)
-        .createSignedUrls(paths, SIGNED_URL_SECONDS);
-
-      if (signedError) {
-        throw new Error("No s'han pogut generar els enllaços de les fotos.");
-      }
-
-      for (const item of signed ?? []) {
-        if (item.path && item.signedUrl) {
-          urlByPath.set(item.path, item.signedUrl);
-        }
-      }
-    }
-
-    return new Response(
-      JSON.stringify({
-        game,
-        team: {
-          id: team.id,
-          key: team.team_key,
-          name: team.name,
-        },
-        challenges,
-        clock: { ...clock, serverNow: new Date(nowMs).toISOString() },
-        result,
-        messages: messages.map((item) => ({
-          id: item.id,
-          sender: item.sender,
-          toAll: item.team_id === null,
-          body: item.body,
-          createdAt: item.created_at,
-        })),
-        submissions: submissions.map(
-          (item: {
-            id: string;
-            challenge_id: string;
-            photo_path: string;
-            status: string;
-            judge_comment: string | null;
-            received_at: string;
-          }) => ({
-            id: item.id,
-            challengeId: item.challenge_id,
-            status: item.status,
-            comment: item.judge_comment ?? "",
-            receivedAt: item.received_at,
-            photoUrl: urlByPath.get(item.photo_path) ?? "",
-          }),
-        ),
+        return {
+          key: item.team_key,
+          name: item.name,
+          approvedCount: teamRows.length,
+          clock: getTeamClock(
+            game,
+            item,
+            getApprovedBonusSeconds(teamRows),
+            nowMs,
+          ),
+        };
       }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      },
     );
+
+    // 5. Enllaços a les fotos, només quan la partida ha acabat (els fa
+    //    servir el resum de l'equip).
+    const urlByPath = result.over
+      ? await signPhotoUrls(
+        admin,
+        (submissions ?? []).map((item) => item.photo_path),
+      )
+      : new Map<string, string>();
+
+    return jsonResponse({
+      game,
+      team: { id: team.id, key: team.team_key, name: team.name },
+      challenges: challenges ?? [],
+      clock: { ...clock, serverNow: new Date(nowMs).toISOString() },
+      result,
+      // Del més antic al més nou
+      messages: (messages ?? []).reverse().map((item) => ({
+        id: item.id,
+        sender: item.sender,
+        toAll: item.team_id === null,
+        body: item.body,
+        createdAt: item.created_at,
+      })),
+      submissions: (submissions ?? []).map((item) => ({
+        id: item.id,
+        challengeId: item.challenge_id,
+        status: item.status,
+        comment: item.judge_comment ?? "",
+        receivedAt: item.received_at,
+        photoUrl: urlByPath.get(item.photo_path) ?? "",
+      })),
+    });
   } catch (error) {
     console.error("get-team-game:", error);
-
-    return new Response(
-      JSON.stringify({ error: "No s'han pogut carregar les dades de la partida." }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    return jsonResponse({
+      error: "No s'han pogut carregar les dades de la partida.",
+    }, 500);
   }
 });

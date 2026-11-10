@@ -19,7 +19,7 @@ Estic desenvolupant una aplicació web anomenada **Gimcana Fotogràfica**. Soc p
 
 **Punt exacte per reprendre:** les Fases 2, 3, 4 i 5 i totes les millores locals demanades fins ara estan acabades i confirmades (vegeu secció 12). Decisió: abans de publicar (Fase 7), fer tot el que es pugui en local, per no haver de publicar més vegades del necessari. Següent: els canvis nous que demani l'usuari, o la Fase 7. Git està endreçat i els commits es pugen a GitHub quan el canvi està provat.
 
-**Terminologia:** a la interfície, el rol de "jutge" es diu **monitor** (decisió del 24/10/2026). Tots els textos visibles del frontend diuen "monitor". Al codi (noms de funcions `judge-*`, components `Judge*`, comentaris) i en aquest document es continua dient "jutge". Última actualització del document: 24/10/2026.
+**Terminologia:** a la interfície, el rol de "jutge" es diu **monitor** (decisió del 24/10/2026). Tots els textos visibles del frontend i els components de React (`Monitor*`) diuen "monitor". Només es manté "judge" on canviar-ho obligaria a tocar la base de dades o a publicar funcions amb un altre nom: les Edge Functions `judge-*` i la columna `judge_id`. Les seccions antigues d'aquest document encara diuen "jutge" (és el mateix). Última actualització del document: 06/11/2026.
 
 **Entorn de treball:** treballo al xat de VS Code (Claude Code), que té accés a tot el repositori. L'assistent llegeix ell mateix els fitxers del projecte (`src/App.tsx`, `supabase/functions/...`); no cal que enganxi fragments de codi. Les normes de treball continuen valent igual (un pas petit, esperar la meva confirmació, no demanar-me claus). Si l'assistent ha de modificar fitxers, m'explica abans què canviarà i en quins fitxers, i després de cada canvi em diu exactament què he de provar. Les publicacions de les Edge Functions les faig jo amb `npx.cmd supabase functions deploy <nom>`.
 
@@ -39,18 +39,15 @@ Carpeta del projecte:
 
 `C:\Users\SENTA\OneDrive\Escritorio\Gimkana fotografica`
 
-Fitxers principals:
-- `src/App.tsx` (encara conté la lògica general, el panell del jutge i la major part dels estats)
-- `src/main.tsx`
-- `src/style.css` (els estils; `main.tsx` importa `./style.css`)
-- `src/supabase.ts`
-- `src/types.ts` (tipus `Challenge`, `Team`, `GameResult`, `ServerSubmission`)
-- `src/utils.ts` (`formatTime`, `formatBonus`)
-- `src/compressPhoto.ts` (redueix les fotos abans de pujar-les)
-- `src/screens/` (pantalles i components extrets d'`App.tsx`, vegeu secció 7)
-- `Gimkana_Fotografica_decisions.txt` (document de requisits del projecte)
-- `supabase/config.toml`
-- `supabase/functions/` (una carpeta per funció, més `_shared/game-clock.ts` amb el càlcul del rellotge i del resultat compartit i `_shared/pin.ts` amb la generació i el hash dels PIN)
+Fitxers principals: vegeu l'estructura completa a la secció 14 (reorganització del 06/11/2026) i el resum a `README.md`. En resum:
+- `src/App.tsx`: només tria entre l'inici, el monitor (`screens/monitor/MonitorApp.tsx`) i els equips (`screens/team/TeamApp.tsx`).
+- `src/hooks/`: la lògica (dades del servidor, consulta cada 5 s, rellotges).
+- `src/lib/`: client de Supabase, crida a les Edge Functions, format, compressió de fotos i sessió del monitor.
+- `src/screens/{common,team,monitor}/`: pantalles.
+- `src/styles/`: estils, per zones.
+- `supabase/functions/`: una carpeta per funció i `_shared/` amb el codi comú.
+- `supabase/schema.sql`: estructura de la base de dades (referència, no s'executa).
+- `docs/`: aquest document.
 
 Per executar ordres de npm a PowerShell, faig servir habitualment `npm.cmd` (i `npx.cmd` si cal) perquè PowerShell pot bloquejar l'execució de scripts.
 
@@ -274,12 +271,13 @@ Vegeu secció 7.
 
 ## 5. Edge Functions
 
-Les funcions utilitzen variables de servidor com `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` i, les del jutge, `SUPABASE_PUBLISHABLE_KEYS`. No demanar-me les claus ni posar-les a `App.tsx`. Cada carpeta de funció té `index.ts`, `deno.json` i `.npmrc` (les noves es creen copiant els dos últims de `judge-set-game-state`).
+Les funcions utilitzen variables de servidor com `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` i, les del jutge, `SUPABASE_PUBLISHABLE_KEYS`. No demanar-me les claus ni posar-les al frontend. Algunes carpetes de funció tenen, a més d'`index.ts`, `deno.json` i `.npmrc` (els fa servir `config.toml`; no s'han de treure). Des del 06/11/2026 totes les funcions fan servir el codi comú de `_shared/` (vegeu secció 14): una funció nova s'ha de fer igual que `judge-send-message` (monitor) o `send-team-message` (equip).
+
+`validate-team-session` es va esborrar el 06/11/2026 (no la feia servir ningú). Si encara apareix al panell de Supabase, es pot esborrar des d'allà.
 
 **Funcions d'equip i públiques (sessió d'equip amb token propi):**
 - `create-game`: crea la partida, els equips A i B (codi i PINs) i els seus reptes copiats de la biblioteca (JWT del jutge; vegeu 4.4).
 - `join-game`: valida codi, equip i PIN i crea una sessió d'equip (té `verify_jwt = false` a `config.toml`). Admet partides `finished`.
-- `validate-team-session`: valida el token personalitzat de sessió de l'equip.
 - `get-team-game`: dades de la partida, l'equip, els reptes, els enviaments (amb `photoUrl` si la partida ha acabat), el rellotge (`clock`, `serverNow`) i el resultat (`result`).
 - `submit-photo`: pujada d'una foto d'un equip (4.11); rebutja si la partida no és `active` o l'equip ha acabat.
 
@@ -293,56 +291,23 @@ Les funcions utilitzen variables de servidor com `SUPABASE_URL`, `SUPABASE_SECRE
 
 **Funció d'equip nova:** `set-team-name` (confirmada): rep `token` i `name` (1-30 caràcters); només en `setup`.
 
-Patró d'autenticació dels equips: token personalitzat → hash SHA-256 → fila a `team_sessions` no revocada ni caducada → equip → partida. Patró del jutge: capçalera `Authorization: Bearer <token>` → `auth.getUser` amb la clau publishable → client amb clau secreta (`admin`) → comprovar `judge_id`. Les respostes d'error van en català i usen els mateixos CORS que la resta.
+Patró d'autenticació dels equips: token personalitzat → hash SHA-256 → fila a `team_sessions` no revocada ni caducada → equip → partida (ara és `requireTeamSession` de `_shared/team-session.ts`). Patró del jutge: capçalera `Authorization: Bearer <token>` → `auth.getUser` amb la clau publishable → client amb clau secreta (`admin`) → comprovar `judge_id` (ara és `requireMonitor` de `_shared/supabase.ts`; la comprovació de `judge_id` continua dins de cada funció). Les respostes d'error van en català i usen els CORS de `_shared/http.ts`.
 
-El fitxer `supabase/config.toml` només inclou:
-
-```toml
-[functions.join-game]
-enabled = true
-verify_jwt = false
-```
-
-No s'ha afegit cap entrada a `config.toml` per a les altres funcions (funcionen amb la configuració per defecte).
+El fitxer `supabase/config.toml` té entrades (amb `verify_jwt = false`) per a `join-game`, `create-game`, `submit-photo`, `judge-list-submissions`, `review-submission` i `judge-set-game-state`. Les altres funcions fan servir la configuració per defecte. No s'ha de canviar sense provar-ho.
 
 ---
 
 ## 6. Estat actual del codi de React
 
-- `Challenge.id` és `number | string` (a la pràctica, UUID string). `Submission.challengeId` també. `ServerSubmission` (a `types.ts`) descriu els enviaments del servidor per al jutge. Els enviaments de l'equip (`teamSubmissions`) tenen el seu tipus dins d'`App.tsx` i de `SummaryScreen.tsx` (`TeamSubmission`).
-- `selectedChallengeIds` és `Record<string, string>` (cadena buida = cap repte triat).
-- `createTeam` no genera reptes de prova (rep `challenges` per paràmetre).
-- **Tot usa el servidor:** login del jutge, creació de partida, entrada dels equips, reptes i aprovacions, estat pendent de l'equip, pujada de fotos, llista i revisió de fotos del jutge (cada 5 s), selector de partida, iniciar/pausar/reprendre, temps, estat i final a les dues pantalles, modal de resultat i resum de l'equip, i el reinici de la partida.
-- **Codi local retirat (pas 6, confirmat):** el temporitzador local, el `localStorage` (`gimkana-game-state`), els enviaments i la moderació locals, el càlcul local del guanyador, les seccions "Fotos pendients" i "Historial de revisions" locals i el peu de pàgina "Prototipo local". També s'han tret de `utils.ts` (`createTeam`, `INITIAL_SECONDS`, `BONUS_SECONDS`, `GAME_STORAGE_KEY`; ara només hi ha `formatTime`) i de `types.ts` (el tipus `Submission`). Els navegadors que ja havien obert l'app poden tenir encara la clau `gimkana-game-state` al `localStorage`; no fa res.
-- Estats de la sessió de l'equip a `App.tsx`: `teamData`, `teamSubmissions`, `teamClock`, `teamNow`, `teamResult` (i el derivat `currentTeam`). Estats del jutge: `judgeGames`, `selectedGameId`, `serverSubmissions`, `judgeServer`, `judgeNow`.
-- Funcions del servidor a `App.tsx`: `uploadPhotoToServer`, `syncGameState`, `loadServerSubmissions`, `handleServerReview`, `refreshTeamFromServer`, `handleJudgeStartPause`, `handleJudgeReset`, `getTeamRemainingSeconds`.
+- **Tot usa el servidor:** login del monitor, creació de partida, entrada dels equips, reptes i aprovacions, pujada de fotos, llista i revisió de fotos (cada 5 s), iniciar/pausar/reprendre, temps, estat i final a les dues pantalles, resultat, resum, missatges i reinici.
+- El codi local antic (temporitzador local, `localStorage` `gimkana-game-state`, moderació local) es va retirar. Els navegadors que ja havien obert l'app poden tenir encara la clau `gimkana-game-state`; no fa res.
+- L'organització actual del codi és a la secció 14.
 
 ---
 
 ## 7. Reorganització del codi
 
-Decisió: he deixat de netejar el codi per prioritzar la funcionalitat. La resta es farà més endavant, si cal.
-
-Fet i confirmat que funciona:
-1. `src/types.ts`
-2. `src/utils.ts`
-3. `src/screens/HomeScreen.tsx`
-4. `src/screens/TeamLoginScreen.tsx`
-5. Eliminats els `console.log` amb el token.
-6. `src/screens/JudgeLoginScreen.tsx`
-7. `src/screens/SummaryScreen.tsx` (ara amb dades del servidor)
-8. Ids seleccionats a text.
-9. Reptes amb punts (•).
-10. `src/screens/TeamPlayerScreen.tsx` (prop nova `finished`).
-11. `src/screens/CreateGameSection.tsx` (formulari "Nova partida": carrega la biblioteca, caselles per als reptes de l'equip A i de l'equip B, botons Tots/Cap i "Copiar els de l'equip A a l'equip B").
-12. `src/screens/JudgeHeader.tsx` (capçalera i introducció del panell).
-13. `src/screens/JudgeTeamGrid.tsx` (targetes dels equips del panell; ara rep `pendingCounts`).
-14. `src/screens/ServerModerationSection.tsx` (secció de moderació: "Fotos dels equips").
-15. `src/screens/ChallengeLibraryScreen.tsx` (Fase 2: pantalla "Biblioteca de reptes", vista `library`; crear, editar i esborrar reptes de `challenge_library`; exporta el tipus `LibraryChallenge`). S'hi accedeix amb el botó "Obrir la biblioteca" del panell.
-
-16. `src/screens/TeamNameScreen.tsx`, `src/screens/GameListSection.tsx` (exporta `JudgeGame`) i `src/screens/TeamAccessSection.tsx`.
-
-Sense extreure (continuen dins d'`App.tsx`): la barra de control (Iniciar/Pausar/Reiniciar), l'avís de resultat del panell i el modal de resultat de l'equip.
+Feta sencera el 06/11/2026: vegeu la secció 14.
 
 ---
 
@@ -414,7 +379,7 @@ Provar jutge i dos equips amb dispositius diferents de debò (ara ja és possibl
 
 **No tornis a configurar Supabase des de zero.** Ja tenim el projecte vinculat, el client configurat, el login del jutge, la creació de partides, l'entrada dels equips, el bucket de fotos, les Edge Functions (amb el rellotge compartit, el resultat i les regles de final al servidor), el panell del jutge i la pantalla de l'equip sincronitzats cada 5 s, i el temps, l'estat, el final i el resultat de la partida sortint del servidor, tot funcionant i provat.
 
-Estàs al xat de VS Code amb accés al repositori: llegeix tu mateix `src/App.tsx` i la resta de fitxers abans de proposar canvis.
+Estàs al xat de VS Code amb accés al repositori: llegeix tu mateix els fitxers (comença per `README.md` i la secció 14) abans de proposar canvis.
 
 **Següent pas:** fer els canvis nous que demani l'usuari (en local) i, després, la Fase 7 (publicar i provar amb mòbils reals).
 
@@ -485,3 +450,41 @@ end $$;
 - Comunicació monitor ↔ equips: taula `messages` (`id`, `game_id` → games cascade, `team_id` → teams cascade, buit = avís a tots; `sender` `monitor`/`team`; `body` 1-300 caràcters; `created_at`), amb RLS i sense polítiques. Funcions noves `judge-send-message` (JWT del monitor; `gameId`, `teamKey` A/B o null, `body`) i `send-team-message` (token d'equip, `body`). `get-team-game` retorna els últims 50 missatges de l'equip (`messages`, amb `toAll`) i `judge-list-submissions` els últims 100 de la partida (amb `teamKey`). `judge-reset-game` esborra els missatges de la partida.
 - Pantalla de l'equip: finestra d'avís a sobre de tot amb "D'acord" i vibració (Android); els avisos vistos es recorden al `localStorage` (`teamSeenMessages:<teamId>`). Apartat "Missatges amb el monitor" (`TeamMessagesSection`) per respondre.
 - Panell del monitor: apartat "Missatges amb els equips" (`MonitorMessagesSection`) amb destinatari, quatre missatges ràpids, historial i comptador de respostes no llegides (`localStorage`, `monitorSeenMessages:<gameId>`).
+
+---
+
+## 14. Reorganització del projecte (06/11/2026)
+
+Objectiu: deixar el projecte endreçat sense canviar res del que es veu ni de com funciona.
+
+**Frontend (`src/`):**
+- `main.tsx`: arrenca React i importa els estils en ordre.
+- `App.tsx`: només decideix què mostra la pestanya: l'inici, el monitor o un equip. "← Tornar a l'inici" tanca la sessió del monitor (només en aquesta pestanya).
+- `types.ts`: tots els tipus compartits (`Challenge`, `Team`, `ServerClock`, `GameMessage`, `GameResult`, `TeamSubmission`, `UploadStatus`, `MonitorGame`, `CreatedGame`, `LibraryChallenge`, `ServerSubmission`).
+- `lib/supabase.ts`: client de Supabase (sessió del monitor a `sessionStorage`).
+- `lib/callFunction.ts`: `callFunction(nom, cos, missatgeSiFalla)`; crida una Edge Function i retorna `{ data, error }` amb el missatge d'error del servidor ja llegit. Totes les crides del frontend passen per aquí.
+- `lib/monitorSession.ts`: recorda la pantalla del monitor (`monitorView` a `sessionStorage`) i `signOutMonitor`.
+- `lib/format.ts` (abans `utils.ts`): `formatTime`, `formatBonus`.
+- `lib/compressPhoto.ts`: redueix les fotos abans de pujar-les.
+- `hooks/useTeamGame.ts`: dades de l'equip (get-team-game cada 5 s), compte enrere, avisos vistos, enviar foto i enviar missatge.
+- `hooks/useMonitorGame.ts`: dades del panell d'una partida (judge-list-submissions cada 5 s), compte enrere, iniciar/pausar, reiniciar i revisar fotos.
+- `screens/common/`: `HomeScreen`, `ChallengeDescription`.
+- `screens/team/`: `TeamApp` (passos: entrar → nom → jugar → resum), `TeamLoginScreen`, `TeamNameScreen`, `TeamPlayerScreen`, `TeamMessagesSection`, `SummaryScreen`, `ResultModal`, `MessageAlert`.
+- `screens/monitor/`: `MonitorApp` (sessió i pantalles), `MonitorLoginScreen`, `MonitorHomeScreen` (partides, nova partida, biblioteca), `MonitorGameScreen` (panell d'una partida), `MonitorHeader`, `MonitorTeamGrid`, `ModerationSection`, `MonitorMessagesSection`, `TeamAccessSection`, `GameListSection`, `CreateGameSection`, `ChallengeLibraryScreen`.
+- `styles/`: `base.css`, `game-panel.css`, `team.css`, `home.css`, `results.css`, `forms.css`, `messages.css` (abans tot era `style.css`; les regles són les mateixes, 192, i en el mateix ordre).
+
+Noms canviats: `JudgeHeader` → `MonitorHeader`, `JudgeLoginScreen` → `MonitorLoginScreen`, `JudgeTeamGrid` → `MonitorTeamGrid`, `ServerModerationSection` → `ModerationSection`, tipus `JudgeGame` → `MonitorGame`.
+
+**Edge Functions (`supabase/functions/_shared/`):**
+- `http.ts`: CORS, `jsonResponse`, `handlePreflight` (OPTIONS i només POST), `readJsonBody`, `isUuid`.
+- `supabase.ts`: `createAdminClient()` i `requireMonitor(req)` (comprova el JWT del monitor i retorna `{ admin, userId }`).
+- `team-session.ts`: `requireTeamSession(admin, token)`, `randomToken`, `sha256Hex`.
+- `photos.ts`: bucket `submission-photos`, `signPhotoUrls` (enllaços d'1 hora) i `removeGamePhotos`.
+- `pin.ts`: `randomPin`, `hashPin`, `verifyPin`.
+- `game-clock.ts`: rellotge i resultat (sense canvis).
+
+Les funcions d'equip (`get-team-game`, `submit-photo`, `set-team-name`, `send-team-message`) ara fan servir el client de Supabase en lloc de crides `fetch` a l'API REST. Les respostes i els missatges d'error són els mateixos.
+
+**Altres:** document de context mogut a `docs/`; `supabase/schema.sql` amb l'estructura de la base de dades (referència, no s'executa); `README.md` amb el resum; esborrada `validate-team-session`.
+
+**Consum de Storage (09/11/2026):** Supabase va avisar d'un excés de "storage egress" (4,5 GB en un dia). Causa: a cada consulta de 5 s el servidor genera enllaços temporals nous a les fotos, i el navegador del monitor tornava a descarregar totes les fotos de la moderació cada 5 s. Solució (només frontend): `lib/photoUrlCache.ts` (`keepPhotoUrls`) reutilitza el primer enllaç de cada foto durant 50 minuts (l'enllaç dura 60), i així el navegador la descarrega una sola vegada. Es fa servir a `useMonitorGame` i `useTeamGame`. A més, les imatges de la moderació i del resum tenen `loading="lazy"`. No s'ha de treure aquesta memòria d'enllaços.

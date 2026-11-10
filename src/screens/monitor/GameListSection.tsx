@@ -1,18 +1,11 @@
 import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
-import { supabase } from "../supabase";
-
-export type JudgeGame = {
-  id: string;
-  name: string;
-  game_code: string;
-  status: string;
-  duration_seconds?: number;
-  created_at?: string;
-};
+import { supabase } from "../../lib/supabase";
+import { callFunction } from "../../lib/callFunction";
+import type { MonitorGame } from "../../types";
 
 type GameListSectionProps = {
-  games: JudgeGame[];
+  games: MonitorGame[];
   onOpenGame: (gameId: string) => void;
   onGamesChanged: () => void;
 };
@@ -49,7 +42,7 @@ export default function GameListSection({
       Number(editDuration) >= 1 &&
       Number(editDuration) <= 180);
 
-  function startEditing(game: JudgeGame) {
+  function startEditing(game: MonitorGame) {
     setDeleteTarget(null);
     setErrorMessage("");
     setEditingId(game.id);
@@ -97,18 +90,17 @@ export default function GameListSection({
     setBusy(true);
     setErrorMessage("");
 
-    const { error } = await supabase.functions.invoke("judge-delete-game", {
-      body: { gameId },
-    });
+    const { error } = await callFunction(
+      "judge-delete-game",
+      { gameId },
+      "No s'ha pogut esborrar la partida."
+    );
 
     setBusy(false);
     setDeleteTarget(null);
 
     if (error) {
-      const detail =
-        error.context instanceof Response ? await error.context.text() : "";
-      console.error("judge-delete-game:", error.message, detail);
-      setErrorMessage("No s'ha pogut esborrar la partida.");
+      setErrorMessage(error);
       return;
     }
 

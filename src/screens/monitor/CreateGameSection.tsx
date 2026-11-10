@@ -1,19 +1,12 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../supabase";
-import type { LibraryChallenge } from "./ChallengeLibraryScreen";
-import { formatBonus } from "../utils";
+import { supabase } from "../../lib/supabase";
+import type { CreatedGame, LibraryChallenge } from "../../types";
+import { formatBonus } from "../../lib/format";
 
 // Text d'un camp de minuts sencers dins d'un interval.
 function isValidMinutes(value: string, min: number, max: number) {
   return /^\d+$/.test(value) && Number(value) >= min && Number(value) <= max;
 }
-
-type CreatedGame = {
-  gameId: string;
-  gameCode: string;
-  teamA: { pin: string };
-  teamB: { pin: string };
-};
 
 type CreateGameSectionProps = {
   gameName: string;

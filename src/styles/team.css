@@ -1,0 +1,207 @@
+/* Pantalla de l'equip: reptes, enviament de fotos i avisos. */
+
+/* Vista dels equips */
+.team-player-view {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.team-player-view .team-card {
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: linear-gradient(145deg, #1a2839, #152131);
+  box-shadow: 0 12px 35px rgb(0 0 0 / 12%);
+}
+
+.team-player-view .eyebrow {
+  margin: 0 0 10px;
+}
+
+.team-player-view h1 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(25px, 5vw, 34px);
+}
+
+.team-player-view .timer {
+  margin: 22px 0 8px;
+  font-size: clamp(46px, 10vw, 64px);
+}
+
+.team-player-view .team-A .timer {
+  color: var(--green);
+}
+
+.team-player-view .team-B .timer {
+  color: var(--orange);
+}
+
+.team-player-view h2 {
+  margin: 28px 0 18px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 20px;
+}
+
+.team-player-view .challenge-list {
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.team-player-view .challenge-row {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgb(16 24 39 / 45%);
+}
+
+.team-player-view > .team-card > p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Formulari per enviar fotografies */
+.team-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgb(16 24 39 / 45%);
+}
+
+.team-upload h2 {
+  margin: 0 0 8px;
+}
+
+.team-upload label {
+  color: #c2d0df;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.team-upload select,
+.team-upload input[type="file"] {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: #e9eef7;
+  background: #101a28;
+  font: inherit;
+  font-size: 13px;
+}
+
+.team-upload select:focus,
+.team-upload input[type="file"]:focus {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.team-upload select:disabled,
+.team-upload input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.team-upload p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Adaptació a mòbils */
+@media (max-width: 480px) {
+  .view-navigation {
+    gap: 7px;
+    margin-bottom: 20px;
+  }
+
+  .view-navigation button {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 8px;
+  }
+
+  .team-player-view .team-card {
+    padding: 20px 16px;
+  }
+
+  .team-upload {
+    padding: 16px 12px;
+  }
+}
+
+
+.photo-upload-input {
+  display: none;
+}
+
+.photo-upload-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 14px 18px;
+  border: 1px solid #34d399;
+  border-radius: 12px;
+  color: #071b17;
+  background: #34d399;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.photo-upload-button:hover {
+  opacity: 0.88;
+}
+
+/* Botó de la galeria: mateixa forma, colors de botó secundari */
+.photo-upload-button-secondary {
+  border-color: var(--border);
+  color: #dce5f0;
+  background: #202e41;
+}
+
+.photo-upload-button:has(+ .photo-upload-input:disabled) {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Avisos a la pantalla de l'equip */
+.rejection-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #fca5a5;
+}
+
+.upload-status {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.upload-status-sending {
+  color: var(--muted);
+}
+
+.upload-status-ok {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.upload-status-error {
+  border-color: #f87171;
+  color: #fca5a5;
+}

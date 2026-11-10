@@ -1,14 +1,5 @@
 import { Check } from "lucide-react";
-import type { Team } from "../types";
-
-type TeamSubmission = {
-  id: string;
-  challengeId: string;
-  status: "pending" | "approved" | "rejected";
-  comment: string;
-  receivedAt: string;
-  photoUrl?: string;
-};
+import type { Team, TeamSubmission } from "../../types";
 
 type SummaryScreenProps = {
   team: Team;
@@ -108,6 +99,7 @@ export default function SummaryScreen({
               {submission.photoUrl && (
                 <img
                   src={submission.photoUrl}
+                  loading="lazy"
                   alt={`Foto del repte ${challengeTitle(submission.challengeId)}`}
                 />
               )}

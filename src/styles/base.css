@@ -1,0 +1,170 @@
+/* Base: tipus de lletra, colors, cos de la pàgina, títols, etiquetes
+   i navegació entre pantalles. */
+
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+:root {
+  font-family: "DM Sans", sans-serif;
+  color: #e9eef7;
+  background: #101827;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --panel: #182334;
+  --border: #2a394c;
+  --muted: #91a0b5;
+  --green: #34d399;
+  --orange: #fbbf24;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at top left, #1a3440 0, transparent 36%),
+    #101827;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.app-shell {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 32px 24px 24px;
+}
+
+.topbar,
+.brand,
+.team-card-top,
+.team-stats,
+.control-bar,
+.control-copy,
+.control-actions,
+.section-heading,
+.review-actions,
+.rule-chip {
+  display: flex;
+  align-items: center;
+}
+
+.topbar,
+.control-bar,
+.section-heading {
+  justify-content: space-between;
+}
+
+.brand {
+  gap: 12px;
+}
+
+.brand-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  color: #071b17;
+  background: var(--green);
+}
+
+.brand h1 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 20px;
+  letter-spacing: 2px;
+}
+
+.brand p,
+.muted,
+.control-copy span,
+.submission-info p,
+.empty-state p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.status-pill,
+.team-status,
+.count-badge {
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 7px 11px;
+  color: #b7c5d8;
+  background: #192536;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.status-pill.live {
+  color: var(--green);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 20px;
+  margin: 44px 0 24px;
+}
+
+.eyebrow {
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.intro h2,
+.section-heading h2 {
+  margin: 8px 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(24px, 4vw, 34px);
+}
+
+.rule-chip {
+  gap: 8px;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: #c2d0df;
+  font-size: 12px;
+}
+
+/* Navegació entre les vistes */
+.view-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.view-navigation button {
+  min-width: 100px;
+}

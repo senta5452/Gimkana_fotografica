@@ -1,9 +1,9 @@
 import { Camera, Check } from "lucide-react";
-import type { Team } from "../types";
-import { formatBonus, formatTime } from "../utils";
-import ChallengeDescription from "./ChallengeDescription";
+import type { Team } from "../../types";
+import { formatBonus, formatTime } from "../../lib/format";
+import ChallengeDescription from "../common/ChallengeDescription";
 
-type JudgeTeamGridProps = {
+type MonitorTeamGridProps = {
   teams: Team[];
   pendingCounts: Record<string, number>;
   running: boolean;
@@ -11,13 +11,13 @@ type JudgeTeamGridProps = {
   getDisplayedSeconds: (team: Team) => number;
 };
 
-export default function JudgeTeamGrid({
+export default function MonitorTeamGrid({
   teams,
   pendingCounts,
   running,
   gameStarted,
   getDisplayedSeconds,
-}: JudgeTeamGridProps) {
+}: MonitorTeamGridProps) {
   return (
     <section className="team-grid">
       {teams.map((team) => {

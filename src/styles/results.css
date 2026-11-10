@@ -1,0 +1,205 @@
+/* Final de partida: finestra del resultat i resum de cada equip. */
+
+/* Pop-up de finalització per als equips */
+.result-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(5 10 20 / 82%);
+  backdrop-filter: blur(8px);
+}
+
+.result-modal {
+  width: 100%;
+  max-width: 440px;
+  padding: 36px 28px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: linear-gradient(145deg, #1a2839, #101a28);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 45%);
+  text-align: center;
+  animation: result-modal-appear 0.3s ease-out;
+}
+
+.result-modal-trophy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 22px;
+  border: 1px solid rgb(251 191 36 / 35%);
+  border-radius: 50%;
+  color: var(--orange);
+  background: rgb(251 191 36 / 10%);
+}
+
+.result-modal .eyebrow {
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+
+.result-modal h1 {
+  margin: 0 0 16px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(28px, 6vw, 36px);
+}
+
+.result-modal-message {
+  margin: 0;
+  color: #c2d0df;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.result-modal-button {
+  width: 100%;
+  margin-top: 28px;
+}
+
+@keyframes result-modal-appear {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 480px) {
+  .result-modal {
+    padding: 30px 20px;
+  }
+}
+
+
+
+/* Resum final de cada equip */
+.team-summary {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.summary-header {
+  margin-bottom: 28px;
+}
+
+.summary-header h1 {
+  margin: 8px 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(28px, 6vw, 40px);
+}
+
+.summary-header > p:last-child {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.summary-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0 32px;
+}
+
+.summary-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.summary-stat strong {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(22px, 4vw, 30px);
+}
+
+.summary-stat span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.team-summary h2 {
+  margin: 28px 0 16px;
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.summary-photos {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.summary-photo {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.summary-photo img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.summary-photo strong {
+  font-size: 14px;
+}
+
+.summary-photo p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 480px) {
+  .summary-stats {
+    gap: 7px;
+  }
+
+  .summary-stat {
+    padding: 14px 8px;
+  }
+
+  .summary-stat span {
+    font-size: 11px;
+  }
+
+  .summary-photo {
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 10px;
+  }
+}
+
+
+.result-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.result-modal-actions .result-modal-button {
+  width: 100%;
+  margin-top: 0;
+}

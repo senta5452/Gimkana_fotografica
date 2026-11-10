@@ -1,20 +1,7 @@
 import { Camera, Check, Clock3, Image as ImageIcon, X } from "lucide-react";
-import type { Team } from "../types";
-import { formatBonus } from "../utils";
-import ChallengeDescription from "./ChallengeDescription";
-
-type TeamSubmission = {
-  id: string;
-  challengeId: string;
-  status: "pending" | "approved" | "rejected";
-  comment: string;
-  receivedAt: string;
-};
-
-type UploadStatus = {
-  kind: "sending" | "ok" | "error";
-  text: string;
-};
+import type { Team, TeamSubmission, UploadStatus } from "../../types";
+import { formatBonus } from "../../lib/format";
+import ChallengeDescription from "../common/ChallengeDescription";
 
 type TeamPlayerScreenProps = {
   team: Team;

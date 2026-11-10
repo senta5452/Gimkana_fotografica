@@ -1,98 +1,45 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+// El monitor aprova o rebutja la foto d'un equip. Si l'equip completa tots
+// els reptes, l'equip i la partida acaben.
+import {
+  handlePreflight,
+  invalidBodyResponse,
+  isUuid,
+  jsonResponse,
+  readJsonBody,
+} from "../_shared/http.ts";
+import { requireMonitor } from "../_shared/supabase.ts";
 import {
   getApprovedBonusSeconds,
   getElapsedSeconds,
   getTeamClock,
 } from "../_shared/game-clock.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, apikey, content-type, x-client-info, x-supabase-api-version",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
 const MAX_COMMENT_LENGTH = 500;
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function response(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
-  if (req.method !== "POST") {
-    return response({ error: "Mètode no permès." }, 405);
-  }
+  const early = handlePreflight(req);
+  if (early) return early;
 
   try {
-    const authorization = req.headers.get("Authorization");
+    const auth = await requireMonitor(req);
+    if (auth instanceof Response) return auth;
+    const { admin, userId } = auth;
 
-    if (!authorization?.startsWith("Bearer ")) {
-      return response({ error: "Cal iniciar sessió com a monitor." }, 401);
-    }
-
-    const accessToken = authorization.slice("Bearer ".length);
-    const url = Deno.env.get("SUPABASE_URL");
-
-    const publishableKeys = JSON.parse(
-      Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "{}",
-    );
-    const secretKeys = JSON.parse(
-      Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}",
-    );
-
-    const publishableKey = publishableKeys.default;
-    const secretKey = secretKeys.default;
-
-    if (!url || !publishableKey || !secretKey) {
-      console.error("Falta la configuració interna de Supabase.");
-      return response({ error: "Configuració del servidor incompleta." }, 500);
-    }
-
-    const authClient = createClient(url, publishableKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    const { data: userData, error: authError } =
-      await authClient.auth.getUser(accessToken);
-
-    if (authError || !userData.user) {
-      return response({ error: "Sessió de monitor no vàlida." }, 401);
-    }
-
-    const admin = createClient(url, secretKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-
-    let body: {
+    const body = await readJsonBody<{
       submissionId?: unknown;
       approved?: unknown;
       comment?: unknown;
-    };
-
-    try {
-      body = await req.json();
-    } catch {
-      return response({ error: "El cos de la petició no és vàlid." }, 400);
-    }
+    }>(req);
+    if (!body) return invalidBodyResponse();
 
     if (
-      typeof body.submissionId !== "string" ||
-      !UUID_PATTERN.test(body.submissionId)
+      !isUuid(body.submissionId)
     ) {
-      return response({ error: "Enviament no vàlid." }, 400);
+      return jsonResponse({ error: "Enviament no vàlid." }, 400);
     }
 
     if (typeof body.approved !== "boolean") {
-      return response({ error: "Cal indicar si s'aprova o es rebutja." }, 400);
+      return jsonResponse({ error: "Cal indicar si s'aprova o es rebutja." }, 400);
     }
 
     const approved = body.approved;
@@ -100,11 +47,11 @@ Deno.serve(async (req) => {
       typeof body.comment === "string" ? body.comment.trim() : "";
 
     if (!approved && !comment) {
-      return response({ error: "Cal indicar el motiu del rebuig." }, 400);
+      return jsonResponse({ error: "Cal indicar el motiu del rebuig." }, 400);
     }
 
     if (comment.length > MAX_COMMENT_LENGTH) {
-      return response(
+      return jsonResponse(
         { error: "El comentari no pot passar de 500 caràcters." },
         400,
       );
@@ -122,10 +69,10 @@ Deno.serve(async (req) => {
     }
 
     if (!submission) {
-      return response({ error: "No s'ha trobat l'enviament." }, 404);
+      return jsonResponse({ error: "No s'ha trobat l'enviament." }, 404);
     }
 
-    // 2. L'equip i la partida han de ser d'aquest jutge
+    // 2. L'equip i la partida han de ser d'aquest monitor
     const { data: team, error: teamError } = await admin
       .from("teams")
       .select(
@@ -139,14 +86,14 @@ Deno.serve(async (req) => {
     }
 
     if (!team) {
-      return response({ error: "No s'ha trobat l'enviament." }, 404);
+      return jsonResponse({ error: "No s'ha trobat l'enviament." }, 404);
     }
 
     const { data: game, error: gameError } = await admin
       .from("games")
       .select("id, status, duration_seconds, clock_started_at, elapsed_seconds")
       .eq("id", team.game_id)
-      .eq("judge_id", userData.user.id)
+      .eq("judge_id", userId)
       .maybeSingle();
 
     if (gameError) {
@@ -154,11 +101,11 @@ Deno.serve(async (req) => {
     }
 
     if (!game) {
-      return response({ error: "No s'ha trobat l'enviament." }, 404);
+      return jsonResponse({ error: "No s'ha trobat l'enviament." }, 404);
     }
 
     if (submission.status !== "pending") {
-      return response(
+      return jsonResponse(
         { error: "Aquest enviament ja ha estat revisat." },
         409,
       );
@@ -182,15 +129,15 @@ Deno.serve(async (req) => {
       );
 
       if (!thisChallenge) {
-        return response({ error: "No s'ha trobat el repte." }, 404);
+        return jsonResponse({ error: "No s'ha trobat el repte." }, 404);
       }
 
       if (thisChallenge.approved) {
-        return response({ error: "Aquest repte ja està aprovat." }, 409);
+        return jsonResponse({ error: "Aquest repte ja està aprovat." }, 409);
       }
 
       if (game.status === "finished") {
-        return response({ error: "La partida ja ha acabat." }, 409);
+        return jsonResponse({ error: "La partida ja ha acabat." }, 409);
       }
 
       const clock = getTeamClock(
@@ -201,7 +148,7 @@ Deno.serve(async (req) => {
       );
 
       if (clock.finished) {
-        return response(
+        return jsonResponse(
           { error: "Aquest equip ja ha acabat la partida." },
           409,
         );
@@ -226,7 +173,7 @@ Deno.serve(async (req) => {
     }
 
     if (!updated) {
-      return response(
+      return jsonResponse(
         { error: "Aquest enviament ja ha estat revisat." },
         409,
       );
@@ -325,7 +272,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return response({
+    return jsonResponse({
       submission: {
         id: updated.id,
         status: updated.status,
@@ -335,6 +282,6 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("review-submission:", error);
-    return response({ error: "No s'ha pogut desar la revisió." }, 500);
+    return jsonResponse({ error: "No s'ha pogut desar la revisió." }, 500);
   }
 });

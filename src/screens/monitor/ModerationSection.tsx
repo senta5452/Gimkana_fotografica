@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Camera, Check, X } from "lucide-react";
-import type { ServerSubmission } from "../types";
+import type { ServerSubmission } from "../../types";
 
-type ServerModerationSectionProps = {
+type ModerationSectionProps = {
   submissions: ServerSubmission[];
   onReview: (
     submissionId: string,
@@ -11,10 +11,10 @@ type ServerModerationSectionProps = {
   ) => Promise<string | null>;
 };
 
-export default function ServerModerationSection({
+export default function ModerationSection({
   submissions,
   onReview,
-}: ServerModerationSectionProps) {
+}: ModerationSectionProps) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectionTarget, setRejectionTarget] = useState<string | null>(null);
   const [rejectionComments, setRejectionComments] = useState<
@@ -73,6 +73,7 @@ export default function ServerModerationSection({
               <div className="submission-preview">
                 <img
                   src={submission.photoUrl}
+                  loading="lazy"
                   alt={`Fotografia del repte: ${submission.title}`}
                   style={{
                     width: "100%",
